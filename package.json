@@ -1,0 +1,40 @@
+{
+  "name": "requirement-review-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "format": "prettier --write app components lib tests scripts *.json *.ts *.mjs *.md",
+    "format:check": "prettier --check app components lib tests scripts *.json *.ts *.mjs *.md",
+    "smoke": "node --experimental-strip-types scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@tesseract.js-data/jpn": "^1.0.0",
+    "mammoth": "1.12.2",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "read-excel-file": "9.3.10",
+    "server-only": "^0.0.1",
+    "sharp": "^0.34.3",
+    "tesseract.js": "^7.0.0",
+    "unpdf": "1.8.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "prettier": "3.9.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "type": "module"
+}
