@@ -1,5 +1,6 @@
 import type { Requirement } from "@/lib/types";
 import { SectionHeading } from "./SectionHeading";
+import { ExpandableText } from "./ExpandableText";
 export function RequirementsTable({ items }: { items: Requirement[] }) {
   return (
     <section id="requirements" className="panel">
@@ -28,7 +29,7 @@ export function RequirementsTable({ items }: { items: Requirement[] }) {
                     </span>
                   </td>
                   <td data-label="要件本文" className="requirement-text">
-                    {r.text}
+                    <ExpandableText text={r.text} />
                   </td>
                   <td data-label="分類">
                     <span className="category">{r.category}</span>

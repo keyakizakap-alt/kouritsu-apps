@@ -1,5 +1,6 @@
 import type { Candidate, Decisions, Decision } from "@/lib/types";
 import { SectionHeading } from "./SectionHeading";
+import { ExpandableText } from "./ExpandableText";
 import { keywords } from "@/lib/engine";
 export function ConflictCards({
   items,
@@ -58,7 +59,7 @@ export function ConflictCards({
                       <span className="mono">{r.id}</span>
                       <span className="small">{r.clause}</span>
                     </div>
-                    <p>{r.text}</p>
+                    <ExpandableText text={r.text} compact />
                     <div
                       className="mt-4 flex flex-wrap items-center gap-2"
                       aria-label="一致したキーワード"

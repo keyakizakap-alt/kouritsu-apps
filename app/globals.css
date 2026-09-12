@@ -573,6 +573,37 @@ td:first-child {
   min-width: 280px;
   line-height: 1.9;
 }
+.expandable-text {
+  min-width: 0;
+}
+.readable-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.85;
+  text-wrap: pretty;
+}
+.readable-text.is-collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.text-toggle {
+  margin-top: 9px;
+  padding: 2px 0;
+  border: 0;
+  color: var(--navy);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.text-toggle:hover,
+.text-toggle:focus-visible {
+  color: var(--amber-dark);
+}
 .requirement-clause {
   white-space: nowrap;
 }

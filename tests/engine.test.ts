@@ -17,7 +17,7 @@ test("sample preserves all ten clauses and finds exactly five documented pairs",
     assert.ok(sample.split("\n")[r.line - 1].endsWith(r.text));
   assert.deepEqual(
     detect(requirements, initialRules).map((c) => c.rule.id),
-    initialRules.map((r) => r.id),
+    initialRules.slice(0, 5).map((r) => r.id),
   );
 });
 test("the same document always produces the same candidates", () => {
@@ -80,6 +80,22 @@ test("documents without clause numbers fall back to page-aware paragraphs", () =
   assert.equal(reqs[0].clause, "PDF 1ページ（本文1）");
   assert.equal(reqs[0].sourceType, "paragraph");
   assert.equal(detect(reqs, initialRules)[0].rule.id, "RULE-01");
+});
+test("the five additional public-system criteria are deterministic", () => {
+  const requirements = extract(`第8章(1)ア 障害発生時は即時復旧すること。
+第8章(1)イ バックアップは日次で取得すること。
+第9章(1)ア 既存端末の全てで利用できること。
+第9章(1)イ 最新ブラウザに限定して提供すること。
+第10章(1)ア 記録は10年間保存すること。
+第10章(1)イ 利用終了時に即時削除すること。
+第11章(1)ア 問い合わせは24時間365日受け付けること。
+第11章(1)イ サポートは平日の営業時間に提供すること。
+第12章(1)ア データは庁内保管とすること。
+第12章(1)イ 保守員は庁外から直接操作できること。`);
+  assert.deepEqual(
+    detect(requirements, initialRules).map((candidate) => candidate.rule.id),
+    ["RULE-06", "RULE-07", "RULE-08", "RULE-09", "RULE-10"],
+  );
 });
 test("duplicate IDs and empty conditions are rejected", () => {
   assert.ok(validateRules([...initialRules, initialRules[0]]));
