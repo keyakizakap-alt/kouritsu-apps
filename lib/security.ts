@@ -3,6 +3,37 @@ type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 const MAX_BUCKETS = 5000;
 
+/** Enforce the upload limit on streamed bytes, even without Content-Length. */
+export async function boundedBody(request: Request, maxBytes: number) {
+  if (Number(request.headers.get("content-length")) > maxBytes)
+    throw Error("size");
+  if (!request.body) throw Error("file");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw Error("size");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 function clientAddress(request: Request) {
   const value =
     request.headers.get("x-vercel-forwarded-for") ||

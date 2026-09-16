@@ -78,8 +78,8 @@ export function Workspace({ initialMode }: { initialMode: string }) {
         ocrPages: data.ocrPages,
         skippedOcrPages: data.skippedOcrPages,
       });
-      const ocrWarning = data.skippedOcrPages
-        ? ` OCR対象のうち${data.skippedOcrPages}ページは処理上限のため未抽出です。PDFを分割すると確認できます。`
+      const ocrWarning = data.unresolvedPages?.length
+        ? ` ${data.unresolvedPages.join("、")}ページは文字の抽出が不完全な可能性があります。原文と照合し、必要な箇所を本文に追記してください。`
         : "";
       setNotice(
         `${data.fileName}を読み込みました。${data.extractionMode || "本文を抽出"}。条件を選んで要件抽出を開始できます。${ocrWarning}`,
