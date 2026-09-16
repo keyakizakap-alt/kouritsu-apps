@@ -3,9 +3,9 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { createWorker, OEM, PSM } from "tesseract.js";
 import { extractImages, extractTextItems, getDocumentProxy } from "unpdf";
+import { recoverPdfPages } from "./pdf-recovery";
 
 const OCR_PAGE_LIMIT = 12;
-const TEXT_THRESHOLD = 24;
 const MAX_IMAGE_PIXELS = 25_000_000;
 
 type TextItem = {
@@ -91,45 +91,45 @@ async function createJapaneseWorker() {
 
 export async function readPdf(bytes: Uint8Array) {
   const pdf = await getDocumentProxy(bytes);
-  if (pdf.numPages > 100) throw Error("pages");
-  const extracted = await extractTextItems(pdf);
-  const pages = extracted.items.map(rebuildPdfPage);
-  const ocrTargets = pages
-    .map((text, index) => ({ index, length: text.replace(/\s/g, "").length }))
-    .filter((page) => page.length < TEXT_THRESHOLD);
-  const targets = ocrTargets.slice(0, OCR_PAGE_LIMIT);
-  let ocrPages = 0;
-  let worker: Awaited<ReturnType<typeof createJapaneseWorker>> | null = null;
+  const resources: {
+    worker: Awaited<ReturnType<typeof createJapaneseWorker>> | null;
+  } = { worker: null };
   try {
-    for (const target of targets) {
-      const image = await pageImage(pdf, target.index + 1);
-      if (!image) continue;
-      worker ??= await createJapaneseWorker();
-      const result = await worker.recognize(image);
-      const text = result.data.text.replaceAll("\0", "").trim();
-      if (text) {
-        pages[target.index] = text;
-        ocrPages += 1;
-      }
-    }
+    if (pdf.numPages > 100) throw Error("pages");
+    const extracted = await extractTextItems(pdf);
+    const recovered = await recoverPdfPages(
+      extracted.items.map(rebuildPdfPage),
+      async (page) => {
+        const image = await pageImage(pdf, page);
+        if (!image) return null;
+        resources.worker ??= await createJapaneseWorker();
+        const result = await resources.worker.recognize(image);
+        return result.data.text;
+      },
+      OCR_PAGE_LIMIT,
+    );
+    const text = recovered.pages
+      .map((page, index) => `【PDF ${index + 1}ページ】\n${page}`)
+      .join("\n\n")
+      .trim();
+    return {
+      text,
+      pages: pdf.numPages,
+      ocrPages: recovered.ocrPages,
+      skippedOcrPages: recovered.skippedOcrPages,
+      unresolvedPages: recovered.unresolvedPages,
+      extractionMode:
+        recovered.ocrPages === 0
+          ? "文字データを抽出"
+          : recovered.ocrPages === pdf.numPages
+            ? "日本語OCRで抽出"
+            : "文字データ＋日本語OCRで抽出",
+    };
   } finally {
-    await worker?.terminate();
+    try {
+      await resources.worker?.terminate();
+    } finally {
+      await pdf.loadingTask.destroy();
+    }
   }
-  const skippedOcrPages = Math.max(0, ocrTargets.length - targets.length);
-  const text = pages
-    .map((page, index) => `【PDF ${index + 1}ページ】\n${page}`)
-    .join("\n\n")
-    .trim();
-  return {
-    text,
-    pages: pdf.numPages,
-    ocrPages,
-    skippedOcrPages,
-    extractionMode:
-      ocrPages === 0
-        ? "文字データを抽出"
-        : ocrPages === pdf.numPages
-          ? "日本語OCRで抽出"
-          : "文字データ＋日本語OCRで抽出",
-  };
 }

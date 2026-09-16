@@ -3,6 +3,7 @@ import readExcelFile from "read-excel-file/node";
 import { readPdf } from "@/lib/pdf";
 import {
   assertSameSite,
+  boundedBody,
   hasExpectedSignature,
   rateLimit,
 } from "@/lib/security";
@@ -33,7 +34,10 @@ export async function POST(request: Request) {
       throw Error("content-type");
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > MAX_FILE_BYTES + 512_000) throw Error("size");
-    const form = await request.formData();
+    const body = await boundedBody(request, MAX_FILE_BYTES + 512_000);
+    const form = await new Response(body, {
+      headers: { "Content-Type": request.headers.get("content-type")! },
+    }).formData();
     const file = form.get("file");
     if (!(file instanceof File) || !file.size || file.size > MAX_FILE_BYTES)
       throw Error("file");
@@ -46,6 +50,7 @@ export async function POST(request: Request) {
     let pages: number | undefined;
     let ocrPages = 0;
     let skippedOcrPages = 0;
+    let unresolvedPages: number[] = [];
     if (["txt", "md", "csv", "json"].includes(ext)) {
       text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     } else if (ext === "docx") {
@@ -73,6 +78,7 @@ export async function POST(request: Request) {
       pages = result.pages;
       ocrPages = result.ocrPages;
       skippedOcrPages = result.skippedOcrPages;
+      unresolvedPages = result.unresolvedPages;
     }
     text = text.replaceAll("\0", "").trim();
     if (!text.replace(/【PDF\s+\d+ページ】/g, "").trim()) throw Error("empty");
@@ -86,6 +92,7 @@ export async function POST(request: Request) {
       pages,
       ocrPages,
       skippedOcrPages,
+      unresolvedPages,
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "";
