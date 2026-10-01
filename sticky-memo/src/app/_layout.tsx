@@ -1,28 +1,54 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import * as ScreenCapture from 'expo-screen-capture';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ui } from '../components/theme';
+import { Icon } from '../components/Icon';
+import { type, useTheme } from '../components/theme';
 import { onReminderOpened } from '../state/reminders';
 import { StoreProvider, useStore } from '../state/store';
 
 export default function RootLayout() {
+  const theme = useTheme();
+  const navTheme = theme.scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const sheet = {
+    presentation: 'formSheet' as const,
+    sheetGrabberVisible: true,
+    sheetAllowedDetents: 'fitToContents' as const,
+    sheetCornerRadius: 24,
+    headerShown: false,
+    contentStyle: { backgroundColor: theme.ui.surface },
+  };
+
   return (
     <SafeAreaProvider>
-      <StoreProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="note/[id]" options={{ animation: 'fade_from_bottom' }} />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="trash" />
-        </Stack>
-        <Guards />
-      </StoreProvider>
+      <ThemeProvider
+        value={{
+          ...navTheme,
+          colors: { ...navTheme.colors, primary: theme.ui.accent, background: theme.ui.groupedBackground, text: theme.ui.label },
+        }}
+      >
+        <StoreProvider>
+          <Stack screenOptions={{ headerTintColor: theme.ui.accent, headerBackButtonDisplayMode: 'minimal' }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="note/[id]" />
+            <Stack.Screen
+              name="settings"
+              options={{ title: '設定', headerLargeTitleEnabled: true, headerTransparent: true, headerBlurEffect: 'systemMaterial' }}
+            />
+            <Stack.Screen
+              name="trash"
+              options={{ title: 'ゴミ箱', headerLargeTitleEnabled: true, headerTransparent: true, headerBlurEffect: 'systemMaterial' }}
+            />
+            <Stack.Screen name="color" options={sheet} />
+            {/* カレンダーが入るため内容に合わせず、画面の大部分を使う高さで開く */}
+            <Stack.Screen name="reminder" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
+            <Stack.Screen name="widget" options={sheet} />
+          </Stack>
+          <Guards />
+        </StoreProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
@@ -30,6 +56,7 @@ export default function RootLayout() {
 /** 読み込み・アプリロック・プライバシー保護を画面の最前面で扱う */
 function Guards() {
   const { status, error, appLocked, unlockApp, settings } = useStore();
+  const { ui } = useTheme();
   const [inactive, setInactive] = useState(false);
 
   // アプリ切替画面のスナップショットに中身を映さない
@@ -62,34 +89,40 @@ function Guards() {
     }
   }, [status, appLocked, inactive, unlockApp]);
 
+  const cover = [StyleSheet.absoluteFill, styles.cover, { backgroundColor: ui.groupedBackground }];
+
   if (status === 'loading') {
     return (
-      <View style={[StyleSheet.absoluteFill, styles.cover]}>
-        <ActivityIndicator color={ui.subInk} />
+      <View style={cover}>
+        <ActivityIndicator color={ui.secondaryLabel} />
       </View>
     );
   }
 
   if (status === 'error') {
     return (
-      <View style={[StyleSheet.absoluteFill, styles.cover]}>
-        <Ionicons name="warning-outline" size={36} color={ui.danger} />
-        <Text style={styles.coverTitle}>データを開けませんでした</Text>
-        <Text style={styles.coverText}>{error}</Text>
+      <View style={cover}>
+        <Icon name="exclamationmark.triangle" size={36} color={ui.danger} />
+        <Text style={[type.title3, { color: ui.label }]}>データを開けませんでした</Text>
+        <Text style={[type.footnote, { color: ui.secondaryLabel, textAlign: 'center' }]}>{error}</Text>
       </View>
     );
   }
 
   if (appLocked) {
     return (
-      <View style={[StyleSheet.absoluteFill, styles.cover]}>
+      <View style={cover} accessibilityViewIsModal>
         <View style={styles.lockNote}>
-          <Ionicons name="lock-closed" size={30} color="#3D3519" />
+          <Icon name="lock.fill" size={30} color="#393413" />
         </View>
-        <Text style={styles.coverTitle}>付箋メモはロックされています</Text>
-        <Pressable onPress={() => void unlockApp()} style={styles.unlock} accessibilityRole="button">
-          <Ionicons name="finger-print" size={20} color="#fff" />
-          <Text style={styles.unlockText}>ロックを解除</Text>
+        <Text style={[type.title3, { color: ui.label, marginTop: 8 }]}>付箋メモはロックされています</Text>
+        <Pressable
+          onPress={() => void unlockApp()}
+          style={({ pressed }) => [styles.unlock, { backgroundColor: ui.accent }, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+        >
+          <Icon name="faceid" size={20} color={ui.onAccent} />
+          <Text style={[type.headline, { color: ui.onAccent }]}>ロックを解除</Text>
         </Pressable>
       </View>
     );
@@ -97,9 +130,9 @@ function Guards() {
 
   if (inactive && (settings.appLock || settings.preventScreenCapture)) {
     return (
-      <View style={[StyleSheet.absoluteFill, styles.cover]}>
+      <View style={cover}>
         <View style={styles.lockNote}>
-          <Ionicons name="eye-off-outline" size={30} color="#3D3519" />
+          <Icon name="eye.slash" size={30} color="#393413" />
         </View>
       </View>
     );
@@ -109,29 +142,17 @@ function Guards() {
 }
 
 const styles = StyleSheet.create({
-  cover: { backgroundColor: '#F2EFE9', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
-  coverTitle: { fontSize: 18, fontWeight: '700', color: ui.ink, marginTop: 8 },
-  coverText: { fontSize: 13, color: ui.subInk, textAlign: 'center' },
+  cover: { alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
   lockNote: {
     width: 84,
     height: 84,
     backgroundColor: '#FFF3A3',
-    borderRadius: 4,
-    borderBottomRightRadius: 20,
+    borderRadius: 6,
+    borderBottomRightRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ rotate: '-4deg' }],
-    boxShadow: ui.shadow.card,
+    boxShadow: '0px 6px 16px rgba(40, 30, 10, 0.2)',
   },
-  unlock: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    backgroundColor: ui.ink,
-    paddingHorizontal: 24,
-    height: 50,
-    borderRadius: 25,
-  },
-  unlockText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  unlock: { marginTop: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 24, minHeight: 50, borderRadius: 25 },
 });

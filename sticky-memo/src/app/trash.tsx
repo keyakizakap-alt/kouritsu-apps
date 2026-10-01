@@ -1,79 +1,117 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { IconButton } from '../components/controls';
-import { ui } from '../components/theme';
+import { Icon } from '../components/Icon';
+import { Section } from '../components/ios';
+import { MIN_TOUCH, type, useTheme, WEB_HEADER_INSET } from '../components/theme';
 import { displayTitle, selectTrash, TRASH_RETENTION_MS } from '../domain/notes';
-import { stickyColor } from '../domain/palette';
+import type { Note } from '../domain/types';
 import { useStore } from '../state/store';
 
+/** iOS は下からのアクションシート、Web プレビューはアラートで選択肢を出す */
+function choose(title: string, message: string, options: { label: string; destructive?: boolean; onPress: () => void }[]) {
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title,
+        message,
+        options: [...options.map((o) => o.label), 'キャンセル'],
+        cancelButtonIndex: options.length,
+        destructiveButtonIndex: options.findIndex((o) => o.destructive),
+      },
+      (index) => options[index]?.onPress(),
+    );
+  } else {
+    Alert.alert(title, message, [
+      ...options.map((o) => ({ text: o.label, style: o.destructive ? ('destructive' as const) : ('default' as const), onPress: o.onPress })),
+      { text: 'キャンセル', style: 'cancel' as const },
+    ]);
+  }
+}
+
 export default function TrashScreen() {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { notes, restore, purge } = useStore();
   const trash = useMemo(() => selectTrash(notes), [notes]);
   const [now] = useState(() => Date.now());
 
-  const confirmPurge = (ids: string[], label: string) => {
-    Alert.alert(`${label}を完全に削除しますか？`, 'この操作は取り消せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '完全に削除', style: 'destructive', onPress: () => void purge(ids) },
+  const daysLeft = (note: Note) => Math.max(0, Math.ceil(((note.deletedAt ?? 0) + TRASH_RETENTION_MS - now) / 86400000));
+  const label = (note: Note) => (note.locked ? note.title || 'ロックされた付箋' : displayTitle(note) || '空の付箋');
+
+  const onItem = (note: Note) =>
+    choose(label(note), `あと${daysLeft(note)}日で完全に削除されます`, [
+      {
+        label: '元に戻す',
+        onPress: () => {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          restore(note.id);
+        },
+      },
+      { label: '完全に削除', destructive: true, onPress: () => void purge([note.id]) },
     ]);
-  };
+
+  const emptyAll = () =>
+    choose('ゴミ箱を空にしますか？', `${trash.length}枚の付箋を完全に削除します。この操作は取り消せません。`, [
+      { label: `${trash.length}枚を完全に削除`, destructive: true, onPress: () => void purge(trash.map((n) => n.id)) },
+    ]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <IconButton icon="chevron-back" label="戻る" onPress={() => router.back()} />
-        <Text style={styles.title}>ゴミ箱</Text>
-        {trash.length ? (
-          <Pressable onPress={() => confirmPurge(trash.map((n) => n.id), `${trash.length}枚の付箋`)} hitSlop={8}>
-            <Text style={styles.emptyAll}>空にする</Text>
-          </Pressable>
-        ) : (
-          <View style={{ width: 64 }} />
-        )}
-      </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}>
+    <>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button hidden={trash.length === 0} onPress={emptyAll} accessibilityLabel="ゴミ箱を空にする">
+          すべて削除
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <ScrollView
+        style={{ backgroundColor: theme.ui.groupedBackground }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 48, paddingTop: WEB_HEADER_INSET, flexGrow: 1 }}
+      >
         {trash.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="trash-outline" size={40} color={ui.faint} />
-            <Text style={styles.emptyText}>ゴミ箱は空です</Text>
+            <Icon name="trash" size={44} color={theme.ui.secondaryLabel} />
+            <Text style={[type.title3, { color: theme.ui.label }]}>ゴミ箱は空です</Text>
+            <Text style={[type.subheadline, { color: theme.ui.secondaryLabel, textAlign: 'center' }]}>
+              削除した付箋は30日間ここに残り、元に戻せます。
+            </Text>
           </View>
         ) : (
-          trash.map((note) => {
-            const c = stickyColor(note.color);
-            const daysLeft = Math.max(0, Math.ceil(((note.deletedAt ?? 0) + TRASH_RETENTION_MS - now) / 86400000));
-            return (
-              <View key={note.id} style={[styles.item, { backgroundColor: c.paper }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.itemTitle, { color: c.ink }]} numberOfLines={1}>
-                    {note.locked ? `🔒 ${note.title || 'ロックされた付箋'}` : displayTitle(note) || '（空の付箋）'}
-                  </Text>
-                  <Text style={[styles.itemMeta, { color: c.subInk }]}>あと {daysLeft} 日で完全削除</Text>
-                </View>
-                <IconButton icon="arrow-undo-outline" label="元に戻す" color={c.ink} onPress={() => restore(note.id)} />
-                <IconButton icon="close-circle-outline" label="完全に削除" color={c.ink} onPress={() => confirmPurge([note.id], 'この付箋')} />
-              </View>
-            );
-          })
+          <Section footer="タップすると「元に戻す」「完全に削除」を選べます。30日を過ぎた付箋は自動で完全に削除されます。">
+            {trash.map((note, i) => {
+              const tone = theme.paper(note.color);
+              const last = i === trash.length - 1;
+              return (
+                <Pressable
+                  key={note.id}
+                  onPress={() => onItem(note)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label(note)}、あと${daysLeft(note)}日で完全に削除`}
+                  style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.ui.fill }]}
+                >
+                  <View style={[styles.swatch, { backgroundColor: tone.paper, borderColor: theme.ui.separator }]}>
+                    {note.locked ? <Icon name="lock.fill" size={13} color={tone.subInk} /> : null}
+                  </View>
+                  <View style={[styles.rowBody, !last && { borderBottomColor: theme.ui.separator, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[type.body, { color: theme.ui.label }]} numberOfLines={1}>
+                      {label(note)}
+                    </Text>
+                    <Text style={[type.footnote, { color: theme.ui.secondaryLabel }]}>あと {daysLeft(note)} 日</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Section>
         )}
       </ScrollView>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F2EFE9' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, height: 52 },
-  title: { fontSize: 17, fontWeight: '700', color: ui.ink },
-  emptyAll: { color: ui.danger, fontWeight: '700', fontSize: 15, paddingHorizontal: 8 },
-  content: { paddingHorizontal: 16, gap: 10, paddingTop: 8 },
-  empty: { alignItems: 'center', paddingTop: 100, gap: 10 },
-  emptyText: { color: ui.subInk, fontSize: 15 },
-  item: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingLeft: 16, paddingVertical: 8, boxShadow: ui.shadow.soft },
-  itemTitle: { fontSize: 15.5, fontWeight: '700' },
-  itemMeta: { fontSize: 12, marginTop: 3 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40, paddingTop: 120 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, minHeight: MIN_TOUCH + 16 },
+  swatch: { width: 28, height: 28, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  rowBody: { flex: 1, paddingVertical: 10, paddingRight: 16, gap: 2 },
 });

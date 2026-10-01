@@ -1,30 +1,31 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { Link, router, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Backdrop, headerTone } from '../components/Backdrop';
-import { Chip, ColorSwatches, IconButton, Sheet } from '../components/controls';
+import { Backdrop, backgroundTone } from '../components/Backdrop';
+import { Icon } from '../components/Icon';
 import { StickyCard } from '../components/StickyCard';
-import { ui } from '../components/theme';
+import { radius, type, useTheme, WEB_HEADER_INSET } from '../components/theme';
 import { selectVisibleNotes, toggleItem } from '../domain/notes';
+import { STICKY_COLORS } from '../domain/palette';
 import type { Note, NoteKind, SortMode, StickyColorId } from '../domain/types';
+import { WIDGET_SLOTS } from '../domain/types';
 import { useStore } from '../state/store';
 
-const SORT_LABELS: Record<SortMode, string> = {
-  updated: '更新日時',
-  created: '作成日時',
-  color: '色',
-  title: 'タイトル',
-  reminder: 'リマインダー',
-};
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: 'updated', label: '更新日時' },
+  { value: 'created', label: '作成日時' },
+  { value: 'title', label: 'タイトル' },
+  { value: 'color', label: '色' },
+  { value: 'reminder', label: 'リマインダー' },
+];
 
 function estimateHeight(note: Note): number {
   if (note.locked) return 110;
-  if (note.kind === 'checklist') return 90 + Math.min(6, note.items.length) * 24;
-  return 90 + Math.min(7, Math.ceil(note.body.length / 14)) * 20;
+  if (note.kind === 'checklist') return 90 + Math.min(6, note.items.length) * 34;
+  return 90 + Math.min(8, Math.ceil(note.body.length / 10)) * 22;
 }
 
 /** 2列の石組み（masonry）レイアウト：低い列へ順に積む */
@@ -34,114 +35,168 @@ function splitColumns(notes: Note[]): [Note[], Note[]] {
   for (const n of notes) {
     const i = heights[0] <= heights[1] ? 0 : 1;
     cols[i].push(n);
-    heights[i] += estimateHeight(n) + 16;
+    heights[i] += estimateHeight(n) + 14;
   }
   return cols;
 }
 
 export default function BoardScreen() {
-  const insets = useSafeAreaInsets();
-  const { notes, settings, updateSettings, createNote, updateNote } = useStore();
+  const theme = useTheme();
+  const { notes, settings, updateSettings, createNote, updateNote, setWidgetSlot, moveToTrash } = useStore();
   const [search, setSearch] = useState('');
-  const [searching, setSearching] = useState(false);
   const [colors, setColors] = useState<StickyColorId[]>([]);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
 
   const visible = useMemo(
     () => selectVisibleNotes(notes, { search, colors, sort: settings.sortMode }),
     [notes, search, colors, settings.sortMode],
   );
   const totalLive = useMemo(() => notes.filter((n) => n.deletedAt === null).length, [notes]);
-  const tone = headerTone(settings.background);
-  const headerInk = tone === 'light' ? '#FFFFFF' : ui.ink;
-  const headerSub = tone === 'light' ? 'rgba(255,255,255,0.75)' : ui.subInk;
-  const board = settings.viewMode === 'board';
+  const tone = backgroundTone(settings.background, theme.scheme);
+  // 文字を大きくしている場合は1列にして、付箋の幅を確保する
+  const board = settings.viewMode === 'board' && !theme.singleColumn;
   const [left, right] = useMemo(() => splitColumns(visible), [visible]);
+  const filtered = colors.length > 0 || search.trim() !== '';
 
-  const open = (id: string) => router.push(`/note/${id}`);
-  const toggle = (note: Note) => (itemId: string) => {
-    void Haptics.selectionAsync();
-    updateNote(note.id, { items: toggleItem(note.items, itemId) });
-  };
   const add = async (kind: NoteKind) => {
-    setAddOpen(false);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const id = await createNote(kind);
     router.push(`/note/${id}?new=1`);
   };
 
+  const toggle = (note: Note) => (itemId: string) => {
+    void Haptics.selectionAsync();
+    updateNote(note.id, { items: toggleItem(note.items, itemId) });
+  };
+
   const renderCard = (note: Note) => (
-    <StickyCard
-      key={note.id}
-      note={note}
-      variant={board ? 'board' : 'list'}
-      fontScale={settings.fontScale}
-      onPress={() => open(note.id)}
-      onToggleItem={note.locked ? undefined : toggle(note)}
-    />
+    <Link key={note.id} href={`/note/${note.id}`} asChild>
+      <Link.Trigger>
+        <StickyCard note={note} variant={board ? 'board' : 'list'} onToggleItem={note.locked ? undefined : toggle(note)} />
+      </Link.Trigger>
+      {note.locked ? null : <Link.Preview />}
+      <Link.Menu>
+        <Link.MenuAction
+          title={note.pinned ? 'ピン留めを外す' : 'ピン留め'}
+          icon={note.pinned ? 'pin.slash' : 'pin'}
+          onPress={() => updateNote(note.id, { pinned: !note.pinned })}
+        />
+        <Link.Menu title="ウィジェットに貼る" icon="widget.small">
+          {WIDGET_SLOTS.map((slot) => (
+            <Link.MenuAction
+              key={slot}
+              title={`スロット ${slot}`}
+              isOn={note.widgetSlot === slot}
+              onPress={() => setWidgetSlot(note.id, note.widgetSlot === slot ? null : slot)}
+            />
+          ))}
+        </Link.Menu>
+        <Link.MenuAction title="色を変える" icon="paintpalette" onPress={() => router.push({ pathname: '/color', params: { id: note.id } })} />
+        <Link.MenuAction
+          title="ゴミ箱に移動"
+          icon="trash"
+          destructive
+          onPress={() => {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            void moveToTrash(note.id);
+          }}
+        />
+      </Link.Menu>
+    </Link>
   );
 
-  const filtered = colors.length > 0 || search.trim() !== '';
-
   return (
-    <View style={styles.root}>
-      <Backdrop background={settings.background} />
+    <View style={{ flex: 1 }} collapsable={false}>
+      <StatusBar style={tone.barStyle} />
+      <Stack.Screen
+        options={{
+          title: '付箋',
+          headerLargeTitleEnabled: true,
+          headerTransparent: true,
+          headerShadowVisible: false,
+          headerLargeTitleShadowVisible: false,
+          headerTitleStyle: { color: tone.onBackground },
+          headerLargeTitleStyle: { color: tone.onBackground },
+          headerTintColor: tone.onBackground,
+          headerSearchBarOptions: {
+            placeholder: '付箋を検索',
+            onChangeText: (e) => setSearch(e.nativeEvent.text),
+            onCancelButtonPress: () => setSearch(''),
+            cancelButtonText: 'キャンセル',
+            hideWhenScrolling: true,
+            textColor: tone.onBackground,
+            hintTextColor: tone.onBackground,
+            headerIconColor: tone.onBackground,
+          },
+        }}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu
+          icon={colors.length ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
+          accessibilityLabel="表示・並べ替え・絞り込み"
+        >
+          <Stack.Toolbar.Menu inline title="表示">
+            <Stack.Toolbar.MenuAction icon="square.grid.2x2" isOn={settings.viewMode === 'board'} onPress={() => updateSettings({ viewMode: 'board' })}>
+              ボード
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon="list.bullet" isOn={settings.viewMode === 'list'} onPress={() => updateSettings({ viewMode: 'list' })}>
+              リスト
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+          <Stack.Toolbar.Menu title="並べ替え" icon="arrow.up.arrow.down">
+            {SORT_OPTIONS.map((o) => (
+              <Stack.Toolbar.MenuAction key={o.value} isOn={settings.sortMode === o.value} onPress={() => updateSettings({ sortMode: o.value })}>
+                {o.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+          <Stack.Toolbar.Menu title="色で絞り込み" icon="paintpalette">
+            <Stack.Toolbar.MenuAction isOn={colors.length === 0} onPress={() => setColors([])}>
+              すべての色
+            </Stack.Toolbar.MenuAction>
+            {STICKY_COLORS.map((c) => (
+              <Stack.Toolbar.MenuAction
+                key={c.id}
+                isOn={colors.includes(c.id)}
+                onPress={() => setColors((prev) => (prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
+              >
+                {c.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="設定" onPress={() => router.push('/settings')} />
+      </Stack.Toolbar>
+      {/* iOS の「メモ」と同じく、下部ツールバーに件数と新規作成を置く */}
+      <Stack.Toolbar>
+        <Stack.Toolbar.Button icon="checklist" accessibilityLabel="新しいチェックリスト" onPress={() => void add('checklist')} />
+        <Stack.Toolbar.Spacer />
+        <Stack.Toolbar.View>
+          <Text style={[type.caption1, { color: tone.onBackground, fontWeight: '600' }]} accessibilityLiveRegion="polite">
+            {filtered ? `${visible.length} / ${totalLive} 枚` : `${totalLive} 枚の付箋`}
+          </Text>
+        </Stack.Toolbar.View>
+        <Stack.Toolbar.Spacer />
+        <Stack.Toolbar.Button icon="square.and.pencil" accessibilityLabel="新しい付箋" onPress={() => void add('text')} />
+      </Stack.Toolbar>
 
-      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.largeTitle, { color: headerInk }]}>付箋</Text>
-            <Text style={[styles.subtitle, { color: headerSub }]}>
-              {filtered ? `${visible.length} / ${totalLive} 枚` : `${totalLive} 枚`}
-            </Text>
-          </View>
-          <IconButton tone="glass" icon="search" label="検索" onPress={() => setSearching((v) => !v)} />
-          <IconButton
-            tone="glass"
-            icon={colors.length ? 'funnel' : 'funnel-outline'}
-            label="絞り込みと並べ替え"
-            onPress={() => setFilterOpen(true)}
-          />
-          <IconButton
-            tone="glass"
-            icon={board ? 'list' : 'grid'}
-            label={board ? 'リスト表示に切り替え' : 'ボード表示に切り替え'}
-            onPress={() => updateSettings({ viewMode: board ? 'list' : 'board' })}
-          />
-          <IconButton tone="glass" icon="settings-outline" label="設定" onPress={() => router.push('/settings')} />
-        </View>
-        {searching ? (
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={17} color={ui.subInk} />
-            <TextInput
-              autoFocus
-              value={search}
-              onChangeText={setSearch}
-              placeholder="付箋を検索"
-              placeholderTextColor={ui.faint}
-              style={styles.searchInput}
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            {search ? <IconButton icon="close-circle" size={18} color={ui.faint} label="検索をクリア" onPress={() => setSearch('')} /> : null}
-          </View>
-        ) : null}
-      </View>
-
+      <Backdrop background={settings.background} scheme={theme.scheme} />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+        contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustsScrollIndicatorInsets
+        contentContainerStyle={styles.content}
         keyboardDismissMode="on-drag"
       >
         {visible.length === 0 ? (
           <View style={styles.empty}>
-            <View style={styles.emptyNote}>
-              <Ionicons name={filtered ? 'search' : 'create-outline'} size={30} color="#7A6C35" />
-              <Text style={styles.emptyTitle}>{filtered ? '見つかりませんでした' : '最初の付箋を貼りましょう'}</Text>
-              <Text style={styles.emptyText}>
+            <View style={[styles.emptyNote, { backgroundColor: theme.paper('lemon').paper, boxShadow: theme.shadow.card }]}>
+              <Icon name={filtered ? 'magnifyingglass' : 'square.and.pencil'} size={30} color={theme.paper('lemon').subInk} />
+              <Text style={[type.title3, { color: theme.paper('lemon').ink }]}>
+                {filtered ? '見つかりませんでした' : '最初の付箋を貼りましょう'}
+              </Text>
+              <Text style={[type.subheadline, { color: theme.paper('lemon').ink }]}>
                 {filtered
-                  ? '検索語や色の絞り込みを変えてみてください'
-                  : '右下の ＋ からメモやチェックリストを作成。\nホーム画面のウィジェットにも貼れます。'}
+                  ? '検索語や色の絞り込みを変えてみてください。'
+                  : '右下の作成ボタンでメモ、左下でチェックリストを作れます。ホーム画面のウィジェットにも貼れます。'}
               </Text>
             </View>
           </View>
@@ -154,119 +209,15 @@ export default function BoardScreen() {
           <View style={styles.list}>{visible.map(renderCard)}</View>
         )}
       </ScrollView>
-
-      <Pressable
-        onPress={() => setAddOpen(true)}
-        onLongPress={() => add('text')}
-        accessibilityRole="button"
-        accessibilityLabel="付箋を追加"
-        style={({ pressed }) => [
-          styles.fab,
-          { bottom: insets.bottom + 24 },
-          tone === 'light' && { backgroundColor: '#FFFDF9' },
-          pressed && { transform: [{ scale: 0.94 }] },
-        ]}
-      >
-        <Ionicons name="add" size={32} color={tone === 'light' ? ui.ink : '#fff'} />
-      </Pressable>
-
-      <Sheet visible={addOpen} onClose={() => setAddOpen(false)} title="新しい付箋">
-        <View style={styles.addRow}>
-          <Pressable style={[styles.addCard, { backgroundColor: '#FFF3A3' }]} onPress={() => add('text')} accessibilityRole="button">
-            <Ionicons name="document-text-outline" size={28} color="#3D3519" />
-            <Text style={styles.addTitle}>テキスト</Text>
-            <Text style={styles.addText}>自由に書くメモ</Text>
-          </Pressable>
-          <Pressable style={[styles.addCard, { backgroundColor: '#D3F5C9' }]} onPress={() => add('checklist')} accessibilityRole="button">
-            <Ionicons name="checkbox-outline" size={28} color="#1F3E19" />
-            <Text style={styles.addTitle}>チェックリスト</Text>
-            <Text style={styles.addText}>ToDo・買い物リスト</Text>
-          </Pressable>
-        </View>
-      </Sheet>
-
-      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="絞り込み・並べ替え">
-        <Text style={styles.sheetLabel}>色で絞り込み</Text>
-        <ColorSwatches
-          multiple
-          selected={colors}
-          onChange={(id) => setColors((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]))}
-        />
-        {colors.length ? (
-          <Pressable onPress={() => setColors([])} style={{ marginTop: 10 }}>
-            <Text style={{ color: ui.accent, fontWeight: '600' }}>色の絞り込みを解除</Text>
-          </Pressable>
-        ) : null}
-        <Text style={styles.sheetLabel}>並べ替え</Text>
-        <View style={styles.chips}>
-          {(Object.keys(SORT_LABELS) as SortMode[]).map((mode) => (
-            <Chip key={mode} label={SORT_LABELS[mode]} active={settings.sortMode === mode} onPress={() => updateSettings({ sortMode: mode })} />
-          ))}
-        </View>
-        <Text style={styles.hint}>ピン留めした付箋は常に先頭に表示されます。</Text>
-      </Sheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#C79A6B' },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  largeTitle: { fontSize: 32, fontWeight: '800', letterSpacing: 0.5 },
-  subtitle: { fontSize: 13, fontWeight: '600', marginTop: 1 },
-  searchBox: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 14,
-    paddingLeft: 12,
-    height: 44,
-    boxShadow: ui.shadow.soft,
-  },
-  searchInput: { flex: 1, fontSize: 16, color: ui.ink, paddingVertical: 0 },
-  content: { paddingHorizontal: 14, paddingTop: 10 },
+  content: { paddingHorizontal: 16, paddingTop: 8 + WEB_HEADER_INSET, paddingBottom: 32 },
   columns: { flexDirection: 'row', gap: 14 },
-  column: { flex: 1, gap: 16 },
-  list: { gap: 10 },
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyNote: {
-    width: 260,
-    padding: 22,
-    backgroundColor: '#FFF3A3',
-    borderRadius: 4,
-    borderBottomRightRadius: 22,
-    transform: [{ rotate: '-2deg' }],
-    boxShadow: ui.shadow.card,
-    gap: 8,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#3D3519' },
-  emptyText: { fontSize: 13.5, lineHeight: 20, color: '#5E5427' },
-  fab: {
-    position: 'absolute',
-    right: 22,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: ui.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: ui.shadow.raised,
-  },
-  addRow: { flexDirection: 'row', gap: 12, marginTop: 4, marginBottom: 8 },
-  addCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 6,
-    borderBottomRightRadius: 20,
-    gap: 6,
-    boxShadow: ui.shadow.card,
-  },
-  addTitle: { fontSize: 16, fontWeight: '700', color: ui.ink, marginTop: 4 },
-  addText: { fontSize: 12.5, color: ui.subInk },
-  sheetLabel: { fontSize: 13, fontWeight: '700', color: ui.subInk, marginTop: 12, marginBottom: 10 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  hint: { fontSize: 12, color: ui.faint, marginTop: 14, marginBottom: 4 },
+  column: { flex: 1, gap: 14 },
+  list: { gap: 12 },
+  empty: { alignItems: 'center', paddingTop: 48 },
+  emptyNote: { width: 290, padding: 22, borderRadius: 6, borderBottomRightRadius: radius.xl, transform: [{ rotate: '-1.5deg' }], gap: 10 },
 });

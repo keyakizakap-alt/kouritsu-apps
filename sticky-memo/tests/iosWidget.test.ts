@@ -44,7 +44,7 @@ function runtime() {
     return { type, props: { ...props, children: props.children === undefined ? [] : flat(props.children) } };
   };
   const components = ['VStack', 'HStack', 'ZStack', 'Text', 'Image', 'Button', 'Spacer'];
-  const modifiers = ['buttonStyle', 'containerBackground', 'font', 'foregroundStyle', 'frame', 'lineLimit', 'opacity', 'padding', 'strikethrough', 'widgetURL'];
+  const modifiers = ['buttonStyle', 'containerBackground', 'font', 'foregroundStyle', 'frame', 'lineLimit', 'lineSpacing', 'opacity', 'padding', 'strikethrough', 'widgetURL'];
   const globals: Record<string, unknown> = { _jsx: jsx, _jsxs: jsx, Fragment: 'Fragment', _Fragment: 'Fragment' };
   for (const name of components) globals[name] = name;
   for (const name of modifiers) globals[name] = (...args: unknown[]) => ({ modifier: name, args });
@@ -68,7 +68,7 @@ function find(node: unknown, pred: (n: Node) => boolean): Node[] {
   return [...(pred(n) ? [n] : []), ...(n.props?.children ?? []).flatMap((c: unknown) => find(c, pred))];
 }
 
-const env = (family: string, slot = 'slot1') => ({ widgetFamily: family, date: new Date(0), configuration: { slot } });
+const env = (family: string, slot = 'slot1', colorScheme: 'light' | 'dark' = 'light') => ({ widgetFamily: family, date: new Date(0), configuration: { slot }, colorScheme });
 
 let seq = 0;
 const id = () => `n${++seq}`;
@@ -124,6 +124,23 @@ describe('iOS ウィジェット（文字列化された関数）', () => {
     assert.ok(texts(widget(props, env('accessoryRectangular'))).includes('今日のタスク'));
     assert.ok(texts(widget(props, env('accessoryInline'))).includes('今日のタスク'));
     assert.ok(texts(widget(props, env('accessoryCircular'))).includes('1/2'));
+  });
+
+  it('iPhone の外観に合わせて紙の色を切り替える', () => {
+    const props = buildWidgetProps([listNote()], 0);
+    const bg = (tree: Node) => tree.props.modifiers.find((m: { modifier: string }) => m.modifier === 'containerBackground').args[0];
+    assert.equal(bg(widget(props, env('systemMedium', 'slot1', 'light'))), props.slots[0]?.light.paper);
+    assert.equal(bg(widget(props, env('systemMedium', 'slot1', 'dark'))), props.slots[0]?.dark.paper);
+  });
+
+  it('11pt 未満の固定サイズ文字を使わない（テキストスタイルで指定）', () => {
+    const tree = widget(buildWidgetProps([listNote()], 0), env('systemSmall'));
+    const fonts = find(tree, () => true).flatMap((n) => (n.props.modifiers ?? []).filter((m: { modifier: string }) => m.modifier === 'font'));
+    assert.ok(fonts.length > 0);
+    for (const f of fonts) {
+      const p = f.args[0];
+      assert.ok(p.textStyle || p.size >= 11, JSON.stringify(p));
+    }
   });
 
   it('スロット設定で別の付箋を表示', () => {

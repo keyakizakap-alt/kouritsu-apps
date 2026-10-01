@@ -1,4 +1,4 @@
-import { stickyColor } from './palette';
+import { type PaperTone, stickyColor } from './palette';
 import { checklistProgress, displayTitle, isChecklistDone, touch } from './notes';
 import type { Note, NoteKind, WidgetSlot } from './types';
 import { WIDGET_SLOTS } from './types';
@@ -17,10 +17,9 @@ export type WidgetNote = {
   title: string;
   body: string;
   items: WidgetItem[];
-  paper: string;
-  band: string;
-  ink: string;
-  subInk: string;
+  /** iPhone の外観（ライト／ダーク）に合わせてウィジェット側で選ぶ */
+  light: PaperTone;
+  dark: PaperTone;
   done: boolean;
   progress: string;
   /** ウィジェットに載せきれなかった項目の件数（進捗表示用） */
@@ -47,10 +46,8 @@ export function toWidgetNote(note: Note, slot: WidgetSlot): WidgetNote {
     id: note.id,
     slot,
     kind: note.kind,
-    paper: c.paper,
-    band: c.band,
-    ink: c.ink,
-    subInk: c.subInk,
+    light: c.light,
+    dark: c.dark,
     rev: note.updatedAt,
     edited: false,
   };

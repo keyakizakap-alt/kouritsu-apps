@@ -48,7 +48,6 @@ export type StickyColorId =
 
 export type SortMode = 'updated' | 'created' | 'color' | 'title' | 'reminder';
 export type ViewMode = 'board' | 'list';
-export type FontScale = 'small' | 'medium' | 'large';
 
 export type BackgroundSetting =
   | { type: 'preset'; id: BackgroundPresetId }
@@ -62,7 +61,6 @@ export type Settings = {
   background: BackgroundSetting;
   sortMode: SortMode;
   viewMode: ViewMode;
-  fontScale: FontScale;
   /** アプリ起動時に生体認証/端末パスコードを要求 */
   appLock: boolean;
   /** バックグラウンド移行後、何秒でロックするか */
@@ -78,7 +76,6 @@ export const DEFAULT_SETTINGS: Settings = {
   background: { type: 'preset', id: 'cork' },
   sortMode: 'updated',
   viewMode: 'board',
-  fontScale: 'medium',
   appLock: false,
   autoLockDelay: 0,
   hideNotificationContent: true,

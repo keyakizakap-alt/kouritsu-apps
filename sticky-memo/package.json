@@ -19,14 +19,15 @@
     "expo-router": "~57.0.24",
     "expo-screen-capture": "~57.0.3",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-widgets": "~57.0.22",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-android-widget": "^0.22.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0"
@@ -41,12 +42,11 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "preview:web": "PREVIEW_WEB=1 EXPO_NO_WEB_SETUP=1 expo start --web"
   },
   "private": true
 }

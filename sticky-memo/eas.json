@@ -8,8 +8,7 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "env": { "APP_VARIANT": "production" }
+      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true

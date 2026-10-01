@@ -1,59 +1,56 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Card, Chip, ColorSwatches, IconButton, Row, SectionLabel, SwitchRow } from '../components/controls';
-import { ui } from '../components/theme';
+import { Icon } from '../components/Icon';
+import { Cell, Section, Segmented, SwitchCell } from '../components/ios';
+import { radius, type, useTheme, WEB_HEADER_INSET } from '../components/theme';
 import { selectTrash } from '../domain/notes';
-import { BACKGROUND_PRESETS } from '../domain/palette';
-import type { AutoLockDelay, FontScale } from '../domain/types';
+import { BACKGROUND_PRESETS, stickyColor } from '../domain/palette';
+import type { AutoLockDelay } from '../domain/types';
 import { authAvailability, authenticate, type AuthAvailability } from '../security/auth';
 import { useStore } from '../state/store';
 import { deleteBackgroundPhoto, pickBackgroundPhoto } from '../storage/backgroundImage';
-import { requestAddWidget } from '../widgets/sync';
 
 const LOCK_DELAYS: { value: AutoLockDelay; label: string }[] = [
-  { value: 0, label: 'すぐに' },
-  { value: 60, label: '1分後' },
-  { value: 300, label: '5分後' },
-  { value: 900, label: '15分後' },
+  { value: 0, label: 'すぐ' },
+  { value: 60, label: '1分' },
+  { value: 300, label: '5分' },
+  { value: 900, label: '15分' },
 ];
 
-const FONT_SCALES: { value: FontScale; label: string }[] = [
-  { value: 'small', label: '小' },
-  { value: 'medium', label: '中' },
-  { value: 'large', label: '大' },
-];
-
-const DIMS = [
-  { value: 0, label: 'なし' },
-  { value: 0.15, label: '弱' },
-  { value: 0.3, label: '中' },
-  { value: 0.5, label: '強' },
-];
+// 「設定」アプリにならい、項目ごとに色付きのアイコンを付けて見分けやすくする
+const TILE = {
+  appearance: '#5E5CE6',
+  color: '#E3A21A',
+  lock: '#34A853',
+  notify: '#E5484D',
+  eye: '#8E8E93',
+  widget: '#0A84FF',
+  trash: '#8E8E93',
+  shield: '#30A46C',
+  text: '#0A84FF',
+};
 
 export default function SettingsScreen() {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { settings, updateSettings, notes } = useStore();
   const [auth, setAuth] = useState<AuthAvailability>('none');
   const trashCount = selectTrash(notes).length;
+  const bg = settings.background;
 
   useEffect(() => {
     void authAvailability().then(setAuth);
   }, []);
-
-  const bg = settings.background;
 
   const choosePhoto = async () => {
     try {
       const uri = await pickBackgroundPhoto();
       if (!uri) return;
       if (bg.type === 'photo') deleteBackgroundPhoto(bg.uri);
-      updateSettings({ background: { type: 'photo', uri, dim: 0.15 } });
+      updateSettings({ background: { type: 'photo', uri, dim: 0.5 } });
     } catch {
-      Alert.alert('写真を読み込めませんでした', '写真へのアクセスを許可しているか確認してください。');
+      Alert.alert('写真を読み込めませんでした', '「設定」アプリ > 付箋メモ > 写真 でアクセスを許可しているか確認してください。');
     }
   };
 
@@ -64,7 +61,7 @@ export default function SettingsScreen() {
 
   const toggleAppLock = async (value: boolean) => {
     if (value && auth === 'none') {
-      Alert.alert('アプリロックを使えません', '端末に Face ID・指紋認証・パスコードのいずれかを設定してください。');
+      Alert.alert('アプリロックを使えません', '「設定」アプリで Face ID またはパスコードを設定してください。');
       return;
     }
     // オン・オフどちらも本人確認してから切り替える
@@ -74,159 +71,141 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <IconButton icon="chevron-back" label="戻る" onPress={() => router.back()} />
-        <Text style={styles.title}>設定</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <SectionLabel>背景</SectionLabel>
+    <ScrollView
+      style={{ backgroundColor: theme.ui.groupedBackground }}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ paddingBottom: 48, paddingTop: WEB_HEADER_INSET }}
+    >
+      <Section header="ボードの背景" footer="背景を写真にした場合も、文字が読みやすいよう自動で暗くします。">
         <View style={styles.bgGrid}>
           {BACKGROUND_PRESETS.map((p) => {
             const active = bg.type === 'preset' && bg.id === p.id;
+            const tone = p[theme.scheme];
             return (
               <Pressable
                 key={p.id}
                 onPress={() => choosePreset(p.id)}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={`背景 ${p.label}`}
                 style={styles.bgItem}
               >
-                <View style={[styles.bgThumb, { backgroundColor: p.base, experimental_backgroundImage: p.gradient }, active && styles.bgActive]}>
-                  <View style={[styles.miniNote, { backgroundColor: '#FFF3A3', transform: [{ rotate: '-4deg' }] }]} />
-                  <View style={[styles.miniNote, { backgroundColor: '#CFE6FF', transform: [{ rotate: '3deg' }], marginTop: 6 }]} />
+                <View
+                  style={[
+                    styles.bgThumb,
+                    { backgroundColor: tone.base, experimental_backgroundImage: tone.gradient, borderColor: active ? theme.ui.accent : theme.ui.separator, borderWidth: active ? 3 : 1 },
+                  ]}
+                >
+                  <View style={[styles.miniNote, { backgroundColor: theme.paper('lemon').paper, transform: [{ rotate: '-4deg' }] }]} />
+                  <View style={[styles.miniNote, { backgroundColor: theme.paper('sky').paper, transform: [{ rotate: '3deg' }], marginTop: 6 }]} />
                 </View>
-                <Text style={styles.bgLabel}>{p.label}</Text>
+                <Text style={[type.footnote, { color: active ? theme.ui.label : theme.ui.secondaryLabel, fontWeight: active ? '700' : '400' }]}>{p.label}</Text>
               </Pressable>
             );
           })}
-          <Pressable onPress={choosePhoto} accessibilityRole="button" accessibilityLabel="写真を背景にする" style={styles.bgItem}>
-            <View style={[styles.bgThumb, styles.photoThumb, bg.type === 'photo' && styles.bgActive]}>
-              {bg.type === 'photo' ? (
-                <Image source={{ uri: bg.uri }} style={StyleSheet.absoluteFill} />
-              ) : (
-                <Ionicons name="image-outline" size={26} color={ui.subInk} />
-              )}
+          <Pressable onPress={() => void choosePhoto()} accessibilityRole="button" accessibilityLabel="写真を背景にする" style={styles.bgItem}>
+            <View
+              style={[
+                styles.bgThumb,
+                { backgroundColor: theme.ui.fill, borderColor: bg.type === 'photo' ? theme.ui.accent : theme.ui.separator, borderWidth: bg.type === 'photo' ? 3 : 1 },
+              ]}
+            >
+              {bg.type === 'photo' ? <Image source={{ uri: bg.uri }} style={StyleSheet.absoluteFill} /> : <Icon name="photo" size={26} color={theme.ui.secondaryLabel} />}
             </View>
-            <Text style={styles.bgLabel}>{bg.type === 'photo' ? '写真（変更）' : '写真から選ぶ'}</Text>
+            <Text style={[type.footnote, { color: theme.ui.secondaryLabel }]}>{bg.type === 'photo' ? '写真を変更' : '写真'}</Text>
           </Pressable>
         </View>
         {bg.type === 'photo' ? (
           <View style={styles.inline}>
-            <Text style={styles.inlineLabel}>写真を暗くする</Text>
-            <View style={styles.chips}>
-              {DIMS.map((d) => (
-                <Chip key={d.label} label={d.label} active={bg.dim === d.value} onPress={() => updateSettings({ background: { ...bg, dim: d.value } })} />
-              ))}
-            </View>
+            <Text style={[type.subheadline, { color: theme.ui.secondaryLabel }]}>写真の暗さ</Text>
+            <Segmented
+              options={[
+                { value: 0.5, label: '標準' },
+                { value: 0.65, label: '暗め' },
+                { value: 0.8, label: 'かなり暗め' },
+              ]}
+              value={bg.dim >= 0.8 ? 0.8 : bg.dim >= 0.65 ? 0.65 : 0.5}
+              onChange={(dim) => updateSettings({ background: { ...bg, dim } })}
+            />
           </View>
         ) : null}
+      </Section>
 
-        <SectionLabel>新しい付箋の色</SectionLabel>
-        <Card>
-          <View style={{ padding: 16 }}>
-            <ColorSwatches value={settings.defaultColor} onChange={(defaultColor) => updateSettings({ defaultColor })} size={34} />
+      <Section footer="文字の大きさは iPhone の「設定」> 画面表示と明るさ > テキストサイズ に合わせて変わります。外観（ライト／ダーク）も iPhone の設定に従います。">
+        <Cell
+          icon="paintpalette"
+          iconColor={TILE.color}
+          title="新しい付箋の色"
+          value={stickyColor(settings.defaultColor).label}
+          onPress={() => router.push({ pathname: '/color', params: { id: 'default' } })}
+        />
+        <Cell icon="textformat.size" iconColor={TILE.text} title="文字の大きさ" value="iPhone の設定" last />
+      </Section>
+
+      <Section header="セキュリティとプライバシー">
+        <SwitchCell
+          icon="faceid"
+          iconColor={TILE.lock}
+          title="アプリロック"
+          detail={auth === 'none' ? 'Face ID・パスコードが未設定です' : auth === 'biometric' ? 'Face ID / Touch ID で開きます' : 'iPhone のパスコードで開きます'}
+          value={settings.appLock}
+          onValueChange={(v) => void toggleAppLock(v)}
+        />
+        {settings.appLock ? (
+          <View style={[styles.inline, styles.inlineInCell, { borderBottomColor: theme.ui.separator }]}>
+            <Text style={[type.subheadline, { color: theme.ui.secondaryLabel }]}>アプリを離れてからロックするまで</Text>
+            <Segmented options={LOCK_DELAYS} value={settings.autoLockDelay} onChange={(autoLockDelay) => updateSettings({ autoLockDelay })} />
           </View>
-        </Card>
+        ) : null}
+        <SwitchCell
+          icon="bell.slash"
+          iconColor={TILE.notify}
+          title="通知に内容を表示しない"
+          detail="リマインダー通知のタイトルと本文を伏せます"
+          value={settings.hideNotificationContent}
+          onValueChange={(hideNotificationContent) => updateSettings({ hideNotificationContent })}
+        />
+        <SwitchCell
+          icon="eye.slash"
+          iconColor={TILE.eye}
+          title="画面収録で内容を隠す"
+          detail="画面収録・ミラーリング中は内容を表示しません"
+          value={settings.preventScreenCapture}
+          onValueChange={(preventScreenCapture) => updateSettings({ preventScreenCapture })}
+          last
+        />
+      </Section>
 
-        <SectionLabel>文字の大きさ</SectionLabel>
-        <View style={styles.chips}>
-          {FONT_SCALES.map((s) => (
-            <Chip key={s.value} label={s.label} active={settings.fontScale === s.value} onPress={() => updateSettings({ fontScale: s.value })} />
-          ))}
-        </View>
+      <Section
+        header="ウィジェット"
+        footer="付箋の下部にある「ウィジェット」ボタンからスロット1〜4に貼ると、ホーム画面・ロック画面のウィジェットに表示されます。チェックリストはウィジェット上でチェックできます。"
+      >
+        <Cell icon="widget.small" iconColor={TILE.widget} title="ウィジェットの追加方法" detail="ホーム画面を長押し →「編集」→「ウィジェットを追加」" multilineDetail last />
+      </Section>
 
-        <SectionLabel>セキュリティ・プライバシー</SectionLabel>
-        <Card>
-          <SwitchRow
-            icon="finger-print"
-            label="アプリロック"
-            detail={auth === 'none' ? '端末に生体認証/パスコードが未設定です' : auth === 'biometric' ? 'Face ID・指紋認証で開く' : '端末のパスコードで開く'}
-            value={settings.appLock}
-            onValueChange={toggleAppLock}
-          />
-          {settings.appLock ? (
-            <View style={styles.subBlock}>
-              <Text style={styles.inlineLabel}>アプリを離れてからロックするまで</Text>
-              <View style={styles.chips}>
-                {LOCK_DELAYS.map((d) => (
-                  <Chip key={d.value} label={d.label} active={settings.autoLockDelay === d.value} onPress={() => updateSettings({ autoLockDelay: d.value })} />
-                ))}
-              </View>
-            </View>
-          ) : null}
-          <SwitchRow
-            icon="notifications-off-outline"
-            label="通知に内容を表示しない"
-            detail="リマインダー通知のタイトル・本文を伏せます"
-            value={settings.hideNotificationContent}
-            onValueChange={(hideNotificationContent) => updateSettings({ hideNotificationContent })}
-          />
-          <SwitchRow
-            icon="eye-off-outline"
-            label="スクリーンショットを防止"
-            detail={Platform.OS === 'android' ? 'スクリーンショット・録画・履歴画面のプレビューを禁止' : '画面収録・ミラーリング時に内容を隠します'}
-            value={settings.preventScreenCapture}
-            onValueChange={(preventScreenCapture) => updateSettings({ preventScreenCapture })}
-          />
-        </Card>
+      <Section header="データ">
+        <Cell icon="trash" iconColor={TILE.trash} title="ゴミ箱" value={`${trashCount}`} onPress={() => router.push('/trash')} />
+        <Cell
+          icon="lock.shield"
+          iconColor={TILE.shield}
+          title="この iPhone にだけ保存"
+          detail="付箋は端末内の暗号化データベースに保存され、鍵はキーチェーンで保護されます。アカウント・クラウド同期・外部への通信はありません。"
+          multilineDetail
+          last
+        />
+      </Section>
 
-        <SectionLabel>ウィジェット</SectionLabel>
-        <Card>
-          <Row
-            icon="apps-outline"
-            label="スロットの使い方"
-            detail="付箋を開いて下部の「ウィジェット」からスロット1〜4に貼ると、ホーム画面のウィジェットに表示されます。チェックリストはウィジェット上でチェックできます。"
-          />
-          {Platform.OS === 'android' ? (
-            <Row icon="add-circle-outline" label="ホーム画面にウィジェットを追加" onPress={() => void requestAddWidget()} />
-          ) : null}
-        </Card>
-
-        <SectionLabel>データ</SectionLabel>
-        <Card>
-          <Row icon="trash-outline" label="ゴミ箱" detail={`${trashCount} 枚・30日後に自動で完全削除`} onPress={() => router.push('/trash')} />
-          <Row
-            icon="shield-checkmark-outline"
-            label="保存場所：この端末のみ"
-            detail="付箋は端末内の暗号化データベース（SQLCipher）に保存され、鍵は Keychain / Keystore で保護されます。クラウド同期・アカウント・解析ツール・外部通信はありません。"
-          />
-        </Card>
-
-        <Text style={styles.footer}>付箋メモ 1.0.0</Text>
-      </ScrollView>
-    </View>
+      <Text style={[type.footnote, styles.version, { color: theme.ui.secondaryLabel }]}>付箋メモ 1.0.0</Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F2EFE9' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, height: 52 },
-  title: { fontSize: 17, fontWeight: '700', color: ui.ink },
-  content: { paddingHorizontal: 16 },
-  bgGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: '3.5%', rowGap: 14 },
-  bgItem: { width: '31%', alignItems: 'center', gap: 6 },
-  bgThumb: {
-    width: '100%',
-    aspectRatio: 0.8,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: 'transparent',
-    boxShadow: ui.shadow.soft,
-  },
-  photoThumb: { backgroundColor: ui.surface },
-  bgActive: { borderColor: ui.ink },
-  miniNote: { width: 34, height: 26, borderRadius: 2, boxShadow: '0px 2px 3px rgba(0,0,0,0.2)' },
-  bgLabel: { fontSize: 12.5, fontWeight: '600', color: ui.ink },
-  inline: { marginTop: 14, gap: 8 },
-  inlineLabel: { fontSize: 13, color: ui.subInk, fontWeight: '600' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  subBlock: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-  footer: { textAlign: 'center', color: ui.faint, fontSize: 12, marginTop: 28 },
+  bgGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, rowGap: 14 },
+  bgItem: { width: '25%', alignItems: 'center', gap: 6 },
+  bgThumb: { width: 64, height: 80, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  miniNote: { width: 30, height: 22, borderRadius: 2, boxShadow: '0px 2px 3px rgba(0,0,0,0.2)' },
+  inline: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
+  inlineInCell: { paddingLeft: 60, borderBottomWidth: StyleSheet.hairlineWidth },
+  version: { textAlign: 'center', marginTop: 28 },
 });

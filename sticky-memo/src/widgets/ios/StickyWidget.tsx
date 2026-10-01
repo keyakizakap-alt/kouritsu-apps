@@ -6,7 +6,7 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
-  opacity,
+  lineSpacing,
   padding,
   strikethrough,
   widgetURL,
@@ -21,7 +21,13 @@ export type StickyWidgetConfiguration = { slot: string };
  * iOS ホーム画面 / ロック画面の付箋ウィジェット。
  * 'widget' ディレクティブ付きの関数は独立ランタイムで動くため、
  * 定数・ヘルパーはすべて関数内に置く（モジュールスコープは参照できない）。
- * 長押し →「ウィジェットを編集」でスロット(1〜4)を選ぶと、アプリでそのスロットに貼った付箋が表示される。
+ * また文字列化の際にバックスラッシュのエスケープ（'\n' など）が失われるため使わない。
+ *
+ * 見やすさ（HIG: Widgets）
+ * - 文字はシステムのテキストスタイルで指定し、Dynamic Type に追従させる（最小でも footnote = 13pt）
+ * - 余白はシステム標準（16pt）のまま
+ * - チェック行は 30pt 以上の高さを取り、押し間違いを減らす
+ * - iPhone の外観に合わせてライト／ダークの紙色を切り替える
  */
 const StickyWidget = (props: WidgetProps, environment: WidgetEnvironment<StickyWidgetConfiguration>) => {
   'widget';
@@ -29,36 +35,36 @@ const StickyWidget = (props: WidgetProps, environment: WidgetEnvironment<StickyW
   const slotNumber = Math.min(4, Math.max(1, Number(String(environment.configuration?.slot ?? 'slot1').replace('slot', '')) || 1));
   const note = props?.slots?.[slotNumber - 1] ?? null;
   const family = environment.widgetFamily;
-  // 文字列化の際にバックスラッシュのエスケープが失われるため、改行は文字コードで表す
   const newline = String.fromCharCode(10);
+  const url = note ? `stickymemo://note/${note.id}` : 'stickymemo://';
   const isAccessory = family === 'accessoryRectangular' || family === 'accessoryInline' || family === 'accessoryCircular';
 
-  // ---- ロック画面（Stibo のロック画面ウィジェット相当）----
+  // ---- ロック画面（Stibo のロック画面ウィジェット相当）。色はシステムが単色化する ----
   if (isAccessory) {
     if (family === 'accessoryInline') {
       const label = !note ? '付箋なし' : note.locked ? 'ロック中の付箋' : note.title || '付箋';
-      return <Text modifiers={[widgetURL(note ? `stickymemo://note/${note.id}` : 'stickymemo://')]}>{label}</Text>;
+      return <Text modifiers={[widgetURL(url)]}>{label}</Text>;
     }
     if (family === 'accessoryCircular') {
       return (
-        <VStack modifiers={[widgetURL(note ? `stickymemo://note/${note.id}` : 'stickymemo://')]}>
+        <VStack modifiers={[widgetURL(url)]}>
           <Image systemName={note?.locked ? 'lock.fill' : 'note.text'} size={18} />
-          {note && note.progress ? <Text modifiers={[font({ size: 11, weight: 'semibold' })]}>{note.progress}</Text> : null}
+          {note && note.progress ? <Text modifiers={[font({ textStyle: 'footnote', weight: 'semibold' })]}>{note.progress}</Text> : null}
         </VStack>
       );
     }
-    const lines = !note
+    const lines = !note || note.locked
       ? []
       : note.kind === 'checklist'
         ? note.items.filter((i) => !i.checked).slice(0, 2).map((i) => `・${i.text}`)
         : note.body.split(newline).filter((l) => l.trim() !== '').slice(0, 2);
     return (
-      <VStack alignment="leading" spacing={1} modifiers={[widgetURL(note ? `stickymemo://note/${note.id}` : 'stickymemo://'), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-        <Text modifiers={[font({ size: 14, weight: 'bold' }), lineLimit(1)]}>
-          {!note ? '付箋なし' : note.locked ? 'ロック中' : note.title || '付箋'}
+      <VStack alignment="leading" spacing={1} modifiers={[widgetURL(url), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+        <Text modifiers={[font({ textStyle: 'headline' }), lineLimit(1)]}>
+          {!note ? '付箋なし' : note.locked ? 'ロック中の付箋' : note.title || '付箋'}
         </Text>
         {lines.map((line, index) => (
-          <Text key={`l${index}`} modifiers={[font({ size: 12 }), lineLimit(1)]}>
+          <Text key={`l${index}`} modifiers={[font({ textStyle: 'subheadline' }), lineLimit(1)]}>
             {line}
           </Text>
         ))}
@@ -67,33 +73,33 @@ const StickyWidget = (props: WidgetProps, environment: WidgetEnvironment<StickyW
   }
 
   // ---- ホーム画面 ----
-  const paper = note?.paper ?? '#FFF3A3';
-  const ink = note?.ink ?? '#3D3519';
-  const subInk = note?.subInk ?? '#7A6C35';
+  const dark = environment.colorScheme === 'dark';
+  const tone = note ? (dark ? note.dark : note.light) : dark
+    ? { paper: '#48431E', band: '#645C26', ink: '#F4F2E6', subInk: '#D1CBA9' }
+    : { paper: '#FFF3A3', band: '#FFEE7A', ink: '#393413', subInk: '#6A622B' };
 
   if (!note) {
     return (
-      <VStack spacing={6} modifiers={[containerBackground(paper, 'widget'), widgetURL('stickymemo://')]}>
-        <Image systemName="plus.circle" size={26} color={subInk} />
-        <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(ink)]}>{`スロット${slotNumber}`}</Text>
-        <Text modifiers={[font({ size: 11 }), foregroundStyle(subInk)]}>アプリで付箋を貼ってください</Text>
+      <VStack spacing={6} modifiers={[containerBackground(tone.paper, 'widget'), widgetURL(url)]}>
+        <Image systemName="plus.circle" size={28} color={tone.subInk} />
+        <Text modifiers={[font({ textStyle: 'headline' }), foregroundStyle(tone.ink)]}>{`スロット${slotNumber}`}</Text>
+        <Text modifiers={[font({ textStyle: 'footnote' }), foregroundStyle(tone.subInk)]}>アプリで付箋を貼ってください</Text>
       </VStack>
     );
   }
 
   if (note.locked) {
     return (
-      <VStack spacing={6} modifiers={[containerBackground(paper, 'widget'), widgetURL(`stickymemo://note/${note.id}`)]}>
-        <Image systemName="lock.fill" size={24} color={subInk} />
-        <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(ink)]}>ロック中の付箋</Text>
+      <VStack spacing={8} modifiers={[containerBackground(tone.paper, 'widget'), widgetURL(url)]}>
+        <Image systemName="lock.fill" size={26} color={tone.subInk} />
+        <Text modifiers={[font({ textStyle: 'headline' }), foregroundStyle(tone.ink)]}>ロック中の付箋</Text>
       </VStack>
     );
   }
 
-  const maxItems = family === 'systemSmall' ? 4 : family === 'systemMedium' ? 4 : 10;
-  const maxBodyLines = family === 'systemSmall' ? 5 : family === 'systemMedium' ? 4 : 14;
-  const titleSize = family === 'systemSmall' ? 14 : 16;
-  const itemSize = family === 'systemSmall' ? 12 : 14;
+  const small = family === 'systemSmall';
+  const maxItems = family === 'systemLarge' || family === 'systemExtraLarge' ? 8 : 3;
+  const maxBodyLines = small ? 5 : family === 'systemMedium' ? 4 : 12;
   const visibleItems = note.items.slice(0, maxItems);
   const rest = note.items.length - visibleItems.length + note.extraTotal;
 
@@ -112,52 +118,40 @@ const StickyWidget = (props: WidgetProps, environment: WidgetEnvironment<StickyW
   return (
     <VStack
       alignment="leading"
-      spacing={family === 'systemSmall' ? 4 : 6}
-      modifiers={[
-        containerBackground(paper, 'widget'),
-        widgetURL(`stickymemo://note/${note.id}`),
-        frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
-      ]}
+      spacing={small ? 4 : 6}
+      modifiers={[containerBackground(tone.paper, 'widget'), widgetURL(url), frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' })]}
     >
-      <HStack spacing={4}>
-        {note.title ? (
-          <Text
-            modifiers={[
-              font({ size: titleSize, weight: 'bold', design: 'rounded' }),
-              foregroundStyle(ink),
-              lineLimit(1),
-              strikethrough({ isActive: note.done, pattern: 'solid', color: subInk }),
-            ]}
-          >
-            {note.title}
-          </Text>
-        ) : null}
+      <HStack spacing={6}>
+        <Text
+          modifiers={[
+            font({ textStyle: small ? 'subheadline' : 'headline', weight: 'semibold' }),
+            foregroundStyle(tone.ink),
+            lineLimit(1),
+            strikethrough({ isActive: note.done, pattern: 'solid', color: tone.subInk }),
+          ]}
+        >
+          {note.title || '付箋'}
+        </Text>
         <Spacer />
         {note.progress ? (
-          <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(subInk)]}>{note.progress}</Text>
+          <Text modifiers={[font({ textStyle: 'footnote', weight: 'semibold' }), foregroundStyle(tone.subInk)]}>{note.progress}</Text>
         ) : null}
       </HStack>
 
       {note.kind === 'text' ? (
-        <Text modifiers={[font({ size: itemSize }), foregroundStyle(ink), lineLimit(maxBodyLines)]}>{note.body}</Text>
+        <Text modifiers={[font({ textStyle: 'subheadline' }), foregroundStyle(tone.ink), lineLimit(maxBodyLines), lineSpacing(3)]}>{note.body}</Text>
       ) : (
-        <VStack alignment="leading" spacing={family === 'systemSmall' ? 2 : 4}>
+        <VStack alignment="leading" spacing={0}>
           {visibleItems.map((item) => (
-            <Button
-              key={item.id}
-              target={`toggle|${note.id}|${item.id}`}
-              onPress={() => toggled(item.id)}
-              modifiers={[buttonStyle('plain')]}
-            >
-              <HStack spacing={6}>
-                <Image systemName={item.checked ? 'checkmark.square.fill' : 'square'} size={itemSize + 2} color={item.checked ? subInk : ink} />
+            <Button key={item.id} target={`toggle|${note.id}|${item.id}`} onPress={() => toggled(item.id)} modifiers={[buttonStyle('plain')]}>
+              <HStack spacing={8} modifiers={[frame({ maxWidth: 9999, minHeight: 30, alignment: 'leading' })]}>
+                <Image systemName={item.checked ? 'checkmark.square.fill' : 'square'} size={19} color={item.checked ? tone.subInk : tone.ink} />
                 <Text
                   modifiers={[
-                    font({ size: itemSize }),
-                    foregroundStyle(item.checked ? subInk : ink),
+                    font({ textStyle: 'subheadline' }),
+                    foregroundStyle(item.checked ? tone.subInk : tone.ink),
                     lineLimit(1),
-                    strikethrough({ isActive: item.checked, pattern: 'solid', color: subInk }),
-                    opacity(item.checked ? 0.75 : 1),
+                    strikethrough({ isActive: item.checked, pattern: 'solid', color: tone.subInk }),
                   ]}
                 >
                   {item.text}
@@ -166,7 +160,7 @@ const StickyWidget = (props: WidgetProps, environment: WidgetEnvironment<StickyW
             </Button>
           ))}
           {rest > 0 ? (
-            <Text modifiers={[font({ size: 11 }), foregroundStyle(subInk), padding({ top: 2 })]}>{`ほか ${rest} 件`}</Text>
+            <Text modifiers={[font({ textStyle: 'footnote', weight: 'semibold' }), foregroundStyle(tone.subInk), padding({ top: 2 })]}>{`ほか ${rest} 件`}</Text>
           ) : null}
         </VStack>
       )}

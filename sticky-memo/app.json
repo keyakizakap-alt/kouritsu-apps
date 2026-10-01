@@ -6,24 +6,19 @@
     "scheme": "stickymemo",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.kouritsuapps.stickymemo",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "NSFaceIDUsageDescription": "ロックした付箋やアプリを開くときの本人確認に Face ID を使用します。"
-      }
-    },
-    "android": {
-      "package": "com.kouritsuapps.stickymemo",
-      "allowBackup": false,
-      "adaptiveIcon": {
-        "backgroundColor": "#FFF3A3",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "deploymentTarget": "17.0",
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      }
     },
     "plugins": [
       "expo-router",
@@ -79,26 +74,6 @@
         }
       ],
       [
-        "react-native-android-widget",
-        {
-          "widgets": [
-            {
-              "name": "StickyWidget",
-              "label": "付箋",
-              "description": "アプリで貼った付箋をホーム画面に表示します",
-              "minWidth": "180dp",
-              "minHeight": "110dp",
-              "targetCellWidth": 3,
-              "targetCellHeight": 2,
-              "maxResizeWidth": "480dp",
-              "maxResizeHeight": "480dp",
-              "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 0
-            }
-          ]
-        }
-      ],
-      [
         "expo-sqlite",
         {
           "useSQLCipher": true
@@ -129,10 +104,25 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#FFF8E1",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#1C1C1E"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "platforms": [
+      "ios"
+    ]
   }
 }
