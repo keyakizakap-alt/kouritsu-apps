@@ -1,0 +1,128 @@
+{
+  "expo": {
+    "name": "付箋メモ",
+    "slug": "sticky-memo",
+    "version": "1.0.0",
+    "scheme": "stickymemo",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.kouritsuapps.stickymemo",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "ロックした付箋やアプリを開くときの本人確認に Face ID を使用します。"
+      },
+      "deploymentTarget": "17.0",
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "StickyWidget",
+              "displayName": "付箋",
+              "description": "アプリで貼った付箋をホーム画面・ロック画面に表示します",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge",
+                  "accessoryRectangular",
+                  "accessoryInline",
+                  "accessoryCircular"
+                ],
+                "configuration": {
+                  "title": "表示する付箋",
+                  "description": "アプリで付箋を貼ったスロットを選びます",
+                  "parameters": {
+                    "slot": {
+                      "title": "スロット",
+                      "type": "enum",
+                      "default": "slot1",
+                      "values": [
+                        {
+                          "name": "スロット1",
+                          "value": "slot1"
+                        },
+                        {
+                          "name": "スロット2",
+                          "value": "slot2"
+                        },
+                        {
+                          "name": "スロット3",
+                          "value": "slot3"
+                        },
+                        {
+                          "name": "スロット4",
+                          "value": "slot4"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "ロックした付箋やアプリを開くときの本人確認に Face ID を使用します。"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "ロックした付箋やアプリを開くときの本人確認に Face ID を使用します。"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#3D3519"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "付箋ボードの背景に使う写真を選ぶためにフォトライブラリにアクセスします。",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#FFF8E1",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#1C1C1E"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "platforms": [
+      "ios"
+    ]
+  }
+}
