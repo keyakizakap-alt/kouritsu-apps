@@ -44,7 +44,7 @@ function runtime() {
     return { type, props: { ...props, children: props.children === undefined ? [] : flat(props.children) } };
   };
   const components = ['VStack', 'HStack', 'ZStack', 'Text', 'Image', 'Button', 'Spacer'];
-  const modifiers = ['buttonStyle', 'containerBackground', 'font', 'foregroundStyle', 'frame', 'lineLimit', 'lineSpacing', 'opacity', 'padding', 'strikethrough', 'widgetURL'];
+  const modifiers = ['buttonStyle', 'containerBackground', 'font', 'foregroundStyle', 'frame', 'lineLimit', 'lineSpacing', 'minimumScaleFactor', 'opacity', 'padding', 'strikethrough', 'widgetURL'];
   const globals: Record<string, unknown> = { _jsx: jsx, _jsxs: jsx, Fragment: 'Fragment', _Fragment: 'Fragment' };
   for (const name of components) globals[name] = name;
   for (const name of modifiers) globals[name] = (...args: unknown[]) => ({ modifier: name, args });
@@ -55,11 +55,16 @@ const source = serializedWidget();
 const context = runtime();
 const widget = vm.runInContext(`(${source})`, context) as (props: WidgetProps, env: object) => Node;
 
+// VM 内で作られた配列は別レルムのため、比較前にこのレルムの文字列配列へ写す
 function texts(node: unknown): string[] {
+  return Array.from(collectTexts(node), String);
+}
+
+function collectTexts(node: unknown): string[] {
   if (typeof node === 'string' || typeof node === 'number') return [String(node)];
   if (!node || typeof node !== 'object') return [];
   const n = node as Node;
-  return (n.props.children ?? []).flatMap(texts);
+  return (n.props.children ?? []).flatMap(collectTexts);
 }
 
 function find(node: unknown, pred: (n: Node) => boolean): Node[] {
@@ -72,6 +77,10 @@ const env = (family: string, slot = 'slot1', colorScheme: 'light' | 'dark' = 'li
 
 let seq = 0;
 const id = () => `n${++seq}`;
+function textNote(patch: Partial<Note> = {}): Note {
+  return { ...createNote('text', 'lemon', 1, id), widgetSlot: 1, ...patch };
+}
+
 function listNote(patch: Partial<Note> = {}): Note {
   return {
     ...createNote('checklist', 'mint', 1, id),
@@ -98,7 +107,6 @@ describe('iOS ウィジェット（文字列化された関数）', () => {
   it('チェックリストを表示し、ボタンで props が更新される', () => {
     const props = buildWidgetProps([listNote()], 0);
     const tree = widget(props, env('systemLarge'));
-    assert.ok(texts(tree).includes('今日のタスク'));
     assert.ok(texts(tree).includes('資料を送る'));
     const buttons = find(tree, (n) => n.type === 'Button');
     assert.equal(buttons.length, 2);
@@ -115,15 +123,33 @@ describe('iOS ウィジェット（文字列化された関数）', () => {
   it('ロック中は中身を出さない', () => {
     const props = buildWidgetProps([listNote({ locked: true })], 0);
     const tree = widget(props, env('systemMedium'));
-    assert.ok(texts(tree).includes('ロック中の付箋'));
-    assert.ok(!texts(tree).includes('資料を送る'));
+    assert.equal(find(tree, (n) => n.type === 'Image' && n.props.systemName === 'lock.fill').length, 1);
+    assert.deepEqual(texts(tree), []);
   });
 
-  it('ロック画面（長方形・インライン・円形）でも描画できる', () => {
-    const props = buildWidgetProps([listNote()], 0);
-    assert.ok(texts(widget(props, env('accessoryRectangular'))).includes('今日のタスク'));
-    assert.ok(texts(widget(props, env('accessoryInline'))).includes('今日のタスク'));
-    assert.ok(texts(widget(props, env('accessoryCircular'))).includes('1/2'));
+  it('ホーム画面ではメモの中身だけを出す（タイトル・件数は出さない）', () => {
+    const memo = textNote({ title: '買い物', body: '牛乳を買う' + String.fromCharCode(10) + '卵も' });
+    for (const family of ['systemSmall', 'systemMedium', 'systemLarge']) {
+      const shown = texts(widget(buildWidgetProps([memo], 0), env(family)));
+      assert.deepEqual(shown, [memo.body], family);
+    }
+    const list = texts(widget(buildWidgetProps([listNote()], 0), env('systemMedium')));
+    assert.deepEqual(list, ['資料を送る', '会議の予約']);
+  });
+
+  it('本文が空のメモはタイトルを中身として出す', () => {
+    const memo = textNote({ title: '電話する', body: '' });
+    assert.deepEqual(texts(widget(buildWidgetProps([memo], 0), env('systemSmall'))), ['電話する']);
+  });
+
+  it('ロック画面（長方形・インライン・円形）でもメモの中身だけを出す', () => {
+    const memo = textNote({ title: '買い物', body: '牛乳を買う' + String.fromCharCode(10) + '卵も' });
+    const props = buildWidgetProps([memo], 0);
+    assert.deepEqual(texts(widget(props, env('accessoryRectangular'))), ['牛乳を買う', '卵も']);
+    assert.deepEqual(texts(widget(props, env('accessoryInline'))), ['牛乳を買う']);
+    assert.deepEqual(texts(widget(props, env('accessoryCircular'))), []);
+    const list = buildWidgetProps([listNote()], 0);
+    assert.deepEqual(texts(widget(list, env('accessoryRectangular'))), ['・資料を送る']);
   });
 
   it('iPhone の外観に合わせて紙の色を切り替える', () => {
@@ -144,8 +170,8 @@ describe('iOS ウィジェット（文字列化された関数）', () => {
   });
 
   it('スロット設定で別の付箋を表示', () => {
-    const other = listNote({ title: '買い物', widgetSlot: 2 });
+    const other = textNote({ body: '2番目のメモ', widgetSlot: 2 });
     const tree = widget(buildWidgetProps([listNote(), other], 0), env('systemSmall', 'slot2'));
-    assert.ok(texts(tree).includes('買い物'));
+    assert.deepEqual(texts(tree), ['2番目のメモ']);
   });
 });

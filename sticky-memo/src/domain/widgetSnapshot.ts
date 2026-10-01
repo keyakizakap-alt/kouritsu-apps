@@ -16,6 +16,8 @@ export type WidgetNote = {
   locked: boolean;
   title: string;
   body: string;
+  /** ウィジェットに表示するメモ本文（テキスト形式）。本文が空ならタイトルを使う */
+  text: string;
   items: WidgetItem[];
   /** iPhone の外観（ライト／ダーク）に合わせてウィジェット側で選ぶ */
   light: PaperTone;
@@ -52,7 +54,7 @@ export function toWidgetNote(note: Note, slot: WidgetSlot): WidgetNote {
     edited: false,
   };
   if (note.locked) {
-    return { ...base, locked: true, title: '', body: '', items: [], done: false, progress: '', extraDone: 0, extraTotal: 0 };
+    return { ...base, locked: true, title: '', body: '', text: '', items: [], done: false, progress: '', extraDone: 0, extraTotal: 0 };
   }
   const { done, total } = checklistProgress(note);
   const filled = note.items.filter((i) => i.text.trim() !== '');
@@ -62,6 +64,7 @@ export function toWidgetNote(note: Note, slot: WidgetSlot): WidgetNote {
     locked: false,
     title: displayTitle(note),
     body: note.kind === 'text' ? note.body.slice(0, WIDGET_MAX_BODY) : '',
+    text: note.kind === 'text' ? (note.body.trim() ? note.body : note.title).trim().slice(0, WIDGET_MAX_BODY) : '',
     items:
       note.kind === 'checklist'
         ? filled
