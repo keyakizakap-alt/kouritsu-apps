@@ -33,3 +33,5 @@ Node.js 公式が 2026-10-21 に High 4件を含む10件の脆弱性を修正し
 - [x] `package.json` の `engines.node` が `^22.23.4 || ^24.22.1` である
 - [x] `.npmrc` に `engine-strict=true` を含む
 - [x] Node.js 24.22.1 で `npm ci`・`npm test`・`npm run smoke` が終了コード0で終わる
+- [x] `scripts/dev.mjs` が `shell: true` を使わずに Next.js を起動する
+- [x] `.github/workflows/ci.yml`・`.github/workflows/codeql.yml`・`.github/dependabot.yml` が存在する
