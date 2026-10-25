@@ -43,6 +43,8 @@ export async function llm(system: string, data: unknown): Promise<unknown> {
       ],
     }),
     signal: AbortSignal.timeout(30000),
+    // Redirects could reach the private hosts rejected above.
+    redirect: "error",
   });
   if (!response.ok) throw Error("upstream");
   const json = await response.json();
