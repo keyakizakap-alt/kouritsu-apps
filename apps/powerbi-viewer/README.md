@@ -1,0 +1,94 @@
+# Power BI データビューア
+
+Power BI からエクスポートした CSV / Excel を、**ブラウザだけで**集計・可視化する静的アプリです。インストールもサーバーも不要です。解析は Python（pandas）が WebAssembly（Pyodide）上でブラウザ内で実行し、**ファイルの中身は外部に送信しません**。
+
+## 使い方
+
+1. Power BI でビジュアル右上の「…（その他のオプション）」→「データのエクスポート」を選び、.xlsx か .csv で保存します。
+2. `index.html` をブラウザ（Chrome / Edge / Firefox / Safari の最新版）で開きます。ダブルクリックで開いても動きます。
+3. ファイルをドロップ（またはクリックして選択）します。「架空のサンプルデータで試す」で操作を確認できます。
+
+初回はライブラリを CDN（cdn.jsdelivr.net）から取得するため、インターネット接続が必要です（Python の準備に約10秒。2回目以降はブラウザのキャッシュで速くなります）。
+
+社内サーバーで配る場合は、このフォルダをそのまま任意の Web サーバーに置くだけです（例: `python3 -m http.server`）。
+
+## できること
+
+| タブ | 内容 |
+| --- | --- |
+| 概要 | 自動インサイト（最大構成比・前月比・ピーク・強い相関・空白の多い列）、列ごとの型・空白率・一意数・要約 |
+| 集計 | カテゴリ別の合計 / 平均 / 中央値 / 最小 / 最大 / 件数 / 個別件数。上位 N 件＋「その他」 |
+| 時系列 | 日・週・月・四半期・年ごとの推移。内訳（上位5件＋その他）で系列を分割 |
+| 分布 | ヒストグラムと要約統計（平均・標準偏差・四分位） |
+| 相関 | 数値列どうしのピアソン相関ヒートマップ |
+| クロス集計 | 行 × 列のピボット（ヒートマップ / 表） |
+| データ | 全列検索・並べ替え・ページ送り、フィルター後の全行を CSV で書き出し |
+
+- 左のフィルター（カテゴリの選択、数値の範囲、日付の期間）はすべてのタブに反映されます。
+- 各グラフは「表」に切り替えて数値を確認でき、CSV と PNG で書き出せます。
+- ライト / ダーク表示、スマートフォン幅に対応しています。
+
+### 読み込みで自動処理すること
+
+- 文字コード: BOM 付き UTF-8（Power BI の CSV）、Shift_JIS（CP932）、UTF-16 を判定
+- 区切り文字: カンマ・タブ・セミコロン・パイプを判定
+- Excel: データの最も多いシートを選択（シートは画面で切替可）
+- Power BI の Excel エクスポートの **1行目「Applied filters: …」** を見出しと区別して画面に注記として表示し、**末尾の「Exported data exceeded the allowed volume…」** があれば「上限に達し一部省略」の警告を出します（[Microsoft Learn: Export data from a Power BI visualization](https://learn.microsoft.com/power-bi/visuals/power-bi-visualization-export-data)）
+- 数値: `1,200` `¥1,000` `12%`（→0.12）`(300)`（→-300）、全角数字
+- 日付: `2025-01-31` `2025/1/31` `2025年1月31日`、Excel の日付セル。区切りのない `2024` は数値として扱います
+
+## 制限
+
+- Power BI のエクスポート上限は .csv が 3万行、.xlsx が 15万行です（ビジュアルや管理者設定でさらに小さくなる場合あり）。このアプリ自体は 200MB までのファイルを受け付けますが、数十万行を超えるとブラウザのメモリ次第で遅くなります。
+- 型推定は値の95%以上が変換できるかで判定します。表記が混在する列はカテゴリやテキストになります。
+- 自動インサイトは集計値から機械的に作る文で、原因の推測はしません。相関は因果を示しません。
+- 解析ライブラリは CDN から取得します。CDN に接続できない環境では動きません（完全オフライン化するには Pyodide と ECharts を同じフォルダに置き、`app.js` の `PYODIDE_URL` と `index.html` の `<script src>` を書き換えてください）。
+
+## 構成
+
+| ファイル | 役割 |
+| --- | --- |
+| `index.html` | 画面の骨組み。CSP で通信先を CDN に限定 |
+| `styles.css` | デザイントークン（ライト / ダーク）とレイアウト |
+| `app.js` | 画面・フィルター・グラフ（Apache ECharts）。Pyodide を Web Worker で起動 |
+| `analysis.py` | 解析エンジン（pandas）。読み込み・型推定・集計・インサイト |
+| `analysis.py.js` | `analysis.py` を `<script>` で読める形にした自動生成ファイル（`file://` 対応のため） |
+| `tests/test_analysis.py` | 解析エンジンの単体テスト |
+
+### 技術選定
+
+- **Pyodide 314.0.7**（Python 3.14 / pandas 3.0.2 / python-calamine 0.6.2 を同梱）: Python をブラウザ内で動かし、pandas の集計をそのまま使うため。Excel は Rust 製で高速な calamine エンジンで読みます。
+- **Apache ECharts 6.1.0**: 依存なしの 1 ファイルで、ヒートマップ・ズーム・PNG 出力まで揃うため。
+- **Web Worker**: 大きなファイルの集計中も画面が固まらないようにするため。Worker は Blob から起動し、`file://` でも動きます。
+
+### セキュリティ
+
+- CSP: `default-src 'none'`、通信は `cdn.jsdelivr.net` のみ。`'unsafe-eval'` は使いません（WebAssembly 用の `'wasm-unsafe-eval'` のみ）。
+- ECharts は `integrity`（SRI）付き、pyodide.js は `fetch` の `integrity` で SHA-384 を検証してから実行します。Pyodide が追加で取得するパッケージは、Pyodide が `pyodide-lock.json` の SHA-256 で検証します。
+- 読み込んだ値は `textContent` でのみ DOM に入れ、ツールチップの HTML はエスケープします。CSV 書き出しでは `=` `+` `-` `@` で始まるセルに `'` を付け、Excel での数式実行を防ぎます。
+
+## 開発
+
+```sh
+# 解析エンジンを変更したら（analysis.py.js を再生成。忘れると npm test が失敗する）
+npm run build:powerbi-viewer
+
+# Python のテスト（ブラウザ内と同じ版を入れる）
+python3 -m pip install -r apps/powerbi-viewer/requirements-dev.txt
+python3 -m unittest discover -s apps/powerbi-viewer/tests -v
+
+# リポジトリ全体のテスト（上の Python テストも含む）
+npm test
+```
+
+### ライブラリの更新手順
+
+1. 新しい版を決め、`app.js` の `PYODIDE_VERSION` と `index.html` の ECharts の URL を書き換えます。
+2. ハッシュを計算して `PYODIDE_INTEGRITY` と `integrity` 属性に書きます。
+
+   ```sh
+   curl -sS https://cdn.jsdelivr.net/pyodide/v<版>/full/pyodide.js | openssl dgst -sha384 -binary | openssl base64 -A
+   curl -sS https://cdn.jsdelivr.net/npm/echarts@<版>/dist/echarts.min.js | openssl dgst -sha384 -binary | openssl base64 -A
+   ```
+
+3. Pyodide 同梱の pandas / python-calamine の版（`pyodide-lock.json`）に合わせて `requirements-dev.txt` を更新し、`npm test` を実行します。

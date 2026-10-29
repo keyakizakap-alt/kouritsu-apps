@@ -37,8 +37,15 @@ jobs:
         run: npx tsc --noEmit
       - name: Format
         run: npm run format:check
+      - name: Python deps for apps/powerbi-viewer
+        # ブラウザ内の Pyodide と同じ版の pandas / python-calamine で解析エンジンをテストする
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r apps/powerbi-viewer/requirements-dev.txt
       - name: Tests and spec check
         run: npm test
+        env:
+          PYTHON: ${{ github.workspace }}/.venv/bin/python
       - name: Build
         run: npm run build
       - name: Smoke test

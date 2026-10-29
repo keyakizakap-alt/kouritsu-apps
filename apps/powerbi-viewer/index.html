@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      ファイルの中身はブラウザの外へ送らない。外部へ出る通信は CDN からのライブラリ取得だけに絞る。
+      'wasm-unsafe-eval' は Pyodide（WebAssembly）の実行に、blob: は検証済みスクリプトとワーカーの起動に使う。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Power BI データビューア</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Crect x='8' y='15' width='4' height='9' rx='1.5' fill='%23fff'/%3E%3Crect x='14' y='10' width='4' height='14' rx='1.5' fill='%23fff'/%3E%3Crect x='20' y='6' width='4' height='18' rx='1.5' fill='%23fff'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"
+      integrity="sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"
+      crossorigin="anonymous"
+      defer
+    ></script>
+    <script src="analysis.py.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" />
+          <rect x="8" y="15" width="4" height="9" rx="1.5" />
+          <rect x="14" y="10" width="4" height="14" rx="1.5" />
+          <rect x="20" y="6" width="4" height="18" rx="1.5" />
+        </svg>
+        <div>
+          <p class="brand-name">Power BI データビューア</p>
+          <p class="brand-sub">CSV・Excel をブラウザ内で可視化</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="engine" id="engine" role="status" aria-live="polite">
+          <span class="engine-dot" aria-hidden="true"></span>
+          <span id="engine-text">Python を準備中…</span>
+        </span>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="表示テーマを切り替える" title="テーマ切替">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- 読み込み前 -->
+      <section class="landing" id="landing">
+        <div class="landing-copy">
+          <p class="eyebrow">ローカル完結・インストール不要</p>
+          <h1>Power BI から出したデータを、<br />その場でグラフに。</h1>
+          <p class="lead">
+            エクスポートした CSV / Excel を選ぶだけで、集計・推移・分布・相関・クロス集計を表示します。
+            解析は Python（pandas）がブラウザ内で実行し、ファイルは外部に送信されません。
+          </p>
+        </div>
+
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.xlsb,.ods" />
+          <svg class="dropzone-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M24 31V11m0 0-8 8m8-8 8 8" />
+            <path d="M10 29v6a4 4 0 0 0 4 4h20a4 4 0 0 0 4-4v-6" />
+          </svg>
+          <span class="dropzone-title">ファイルをドロップ、またはクリックして選択</span>
+          <span class="dropzone-hint">.csv / .xlsx / .xls（Shift_JIS・UTF-8 の CSV に対応）</span>
+        </label>
+        <div class="landing-actions">
+          <button type="button" class="btn btn-ghost" id="sample-btn">架空のサンプルデータで試す</button>
+        </div>
+        <p class="error" id="load-error" role="alert" hidden></p>
+
+        <ol class="steps" aria-label="Power BI からのエクスポート手順">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <p class="step-title">ビジュアルの「…」を開く</p>
+              <p class="step-text">Power BI Desktop / サービスで、出力したい表やグラフの右上「その他のオプション」を選びます。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <p class="step-title">「データのエクスポート」</p>
+              <p class="step-text">.xlsx（最大15万行）か .csv（最大3万行）を選んで保存します。上限はビジュアルや管理者設定で小さくなる場合があります。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <p class="step-title">このページで開く</p>
+              <p class="step-text">列の型（数値・日付・カテゴリ）を自動判定し、集計しやすい形でグラフ化します。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 読み込み後 -->
+      <section class="workspace" id="workspace" hidden>
+        <div class="filebar">
+          <div class="file-meta">
+            <p class="file-name" id="file-name"></p>
+            <p class="file-sub" id="file-sub"></p>
+          </div>
+          <div class="file-actions">
+            <label class="field field-inline" id="sheet-field" hidden>
+              <span>シート</span>
+              <select id="sheet-select"></select>
+            </label>
+            <label class="btn btn-ghost" for="file-input-2">別のファイルを開く</label>
+            <input type="file" id="file-input-2" class="visually-hidden" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.xlsb,.ods" />
+          </div>
+        </div>
+
+        <div class="layout">
+          <aside class="filters" aria-label="フィルター">
+            <div class="panel-head">
+              <h2>フィルター</h2>
+              <button type="button" class="link-btn" id="clear-filters" hidden>すべて解除</button>
+            </div>
+            <ul class="chips" id="filter-chips"></ul>
+            <label class="field">
+              <span>列を選んで追加</span>
+              <select id="filter-column"></select>
+            </label>
+            <div class="filter-editor" id="filter-editor" hidden></div>
+          </aside>
+
+          <div class="content">
+            <div class="kpis" id="kpis"></div>
+
+            <nav class="tabs" role="tablist" aria-label="分析ビュー" id="tabs">
+              <button role="tab" type="button" data-tab="overview" aria-selected="true">概要</button>
+              <button role="tab" type="button" data-tab="group" aria-selected="false">集計</button>
+              <button role="tab" type="button" data-tab="trend" aria-selected="false">時系列</button>
+              <button role="tab" type="button" data-tab="dist" aria-selected="false">分布</button>
+              <button role="tab" type="button" data-tab="corr" aria-selected="false">相関</button>
+              <button role="tab" type="button" data-tab="pivot" aria-selected="false">クロス集計</button>
+              <button role="tab" type="button" data-tab="data" aria-selected="false">データ</button>
+            </nav>
+            <div class="tab-panel" id="panel" role="tabpanel" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="busy" id="busy" hidden>
+      <div class="busy-card" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="busy-text">処理中…</span>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>
+        ファイルはブラウザ内だけで処理されます。初回はライブラリ（Pyodide・pandas・ECharts）を CDN から取得するため、インターネット接続が必要です。
+      </p>
+    </footer>
+  </body>
+</html>
