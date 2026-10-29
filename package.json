@@ -12,7 +12,8 @@
     "format:check": "prettier --check app components lib tests scripts *.json *.ts *.mjs *.md",
     "smoke": "node --experimental-strip-types scripts/smoke.mjs",
     "lint:specs": "node scripts/harness/check-specs.mjs",
-    "build:powerbi-viewer": "node scripts/build-powerbi-viewer.mjs"
+    "build:powerbi-viewer": "node scripts/build-powerbi-viewer.mjs",
+    "pin:powerbi-viewer": "node scripts/pin-powerbi-viewer-cdn.mjs"
   },
   "dependencies": {
     "@tesseract.js-data/jpn": "^1.0.0",

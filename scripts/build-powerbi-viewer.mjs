@@ -52,16 +52,18 @@ export function renderBundle({ html, css, pyJs, appJs }) {
   }
   const scripts = [pyJs, appJs].map((code) => `\n${code}\n`);
   let out = html;
-  // インラインのスクリプトはハッシュで許可する（'unsafe-inline' は使わない）
+  // インラインのスクリプトとスタイルはハッシュで許可する（'unsafe-inline' は使わない）
   out = replaceOnce(
     out,
     "script-src 'self'",
     `script-src ${scripts.map(sha256).join(" ")}`,
   );
+  const style = `\n${css}`;
+  out = replaceOnce(out, "style-src 'self'", `style-src ${sha256(style)}`);
   out = replaceOnce(
     out,
     '<link rel="stylesheet" href="styles.css" />',
-    `<style>\n${css}</style>`,
+    `<style>${style}</style>`,
   );
   out = replaceOnce(
     out,

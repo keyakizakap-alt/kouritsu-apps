@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import vm from "node:vm";
 import {
   BUNDLE_NAME,
   VIEWER_DIR,
@@ -47,9 +48,52 @@ test("1 ファイル版 HTML は CDN 以外のファイルを参照しない", (
   );
 });
 
-test("CDN のスクリプトはバージョン固定かつ改ざん検知つきで読み込む", () => {
+/** app.js を DOM なしで読み込み、関数を取り出す（画面の起動処理は DOMContentLoaded まで走らない）。 */
+function loadAppFunctions() {
+  const context: Record<string, unknown> = {
+    self: {},
+    document: { documentElement: { dataset: {} }, addEventListener() {} },
+    localStorage: {
+      getItem: () => null,
+      setItem() {},
+    },
+    URL,
+    Blob,
+    Intl,
+  };
+  context.self = context;
+  vm.createContext(context);
+  vm.runInContext(
+    `${read("app.js")}\n;globalThis.__exports = { toCsv, PYODIDE_FILES, PYODIDE_PACKAGES };`,
+    context,
+  );
+  return context.__exports as {
+    toCsv: (header: unknown[], rows: unknown[][]) => string;
+    PYODIDE_FILES: Record<string, string>;
+    PYODIDE_PACKAGES: string[];
+  };
+}
+
+function csp(name: string) {
+  const html = read(name);
+  const value = html.match(
+    /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/,
+  )?.[1];
+  assert.ok(
+    value,
+    `${name} に CSP の meta タグがない。直し方: <head> に Content-Security-Policy を戻す`,
+  );
+  return Object.fromEntries(
+    value
+      .split(";")
+      .map((d) => d.trim().split(/\s+/))
+      .filter((d) => d[0])
+      .map(([k, ...v]) => [k, v]),
+  ) as Record<string, string[]>;
+}
+
+test("CDN のファイルはすべて版を固定し、SHA-384 で検証してから使う", () => {
   const html = read("index.html");
-  const app = read("app.js");
   const scripts = [
     ...html.matchAll(/<script\s[^>]*src="(https:[^"]+)"[^>]*>/g),
   ];
@@ -62,41 +106,115 @@ test("CDN のスクリプトはバージョン固定かつ改ざん検知つき�
     );
     assert.match(
       tag,
-      /integrity="sha384-[A-Za-z0-9+/=]+"/,
-      `${src} に integrity がない。直し方: README の手順で SHA-384 を計算して integrity 属性に書く`,
+      /integrity="sha384-[A-Za-z0-9+/=]{64}"/,
+      `${src} に integrity がない。直し方: npm run pin:powerbi-viewer を実行する`,
     );
   }
-  assert.match(
-    app,
-    /PYODIDE_VERSION = "\d+\.\d+\.\d+"/,
-    "Pyodide のバージョンが固定されていない。直し方: app.js の PYODIDE_VERSION に x.y.z を書く",
-  );
-  assert.match(
-    app,
-    /PYODIDE_INTEGRITY = "sha384-[A-Za-z0-9+/=]{64}"/,
-    "pyodide.js のハッシュがない。直し方: README の手順で SHA-384 を計算して PYODIDE_INTEGRITY に書く",
-  );
+  const { PYODIDE_FILES, PYODIDE_PACKAGES } = loadAppFunctions();
+  for (const core of [
+    "pyodide.js",
+    "pyodide.asm.mjs",
+    "pyodide.asm.wasm",
+    "python_stdlib.zip",
+    "pyodide-lock.json",
+  ]) {
+    assert.match(
+      PYODIDE_FILES[core] ?? "",
+      /^sha384-[A-Za-z0-9+/=]{64}$/,
+      `${core} のハッシュが PYODIDE_FILES にない。直し方: npm run pin:powerbi-viewer を実行する`,
+    );
+  }
+  for (const name of PYODIDE_PACKAGES) {
+    const prefix = name.replace(/-/g, "_");
+    assert.ok(
+      Object.keys(PYODIDE_FILES).some((f) => f.startsWith(`${prefix}-`)),
+      `${name} の wheel のハッシュが PYODIDE_FILES にない。直し方: npm run pin:powerbi-viewer を実行する`,
+    );
+  }
 });
 
-test("ページは外部への送信先を CDN だけに制限している", () => {
-  const html = read("index.html");
-  const csp = html.match(
-    /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/,
-  )?.[1];
-  assert.ok(
-    csp,
-    "CSP の meta タグがない。直し方: index.html の <head> に Content-Security-Policy を戻す",
-  );
-  assert.match(csp, /default-src 'none'/, "default-src が 'none' でない");
-  assert.match(
-    csp,
-    /connect-src https:\/\/cdn\.jsdelivr\.net;/,
-    "connect-src に CDN 以外が含まれている。直し方: ファイルの中身を送れる送信先を増やさない",
-  );
-  assert.doesNotMatch(
-    csp,
-    /'unsafe-eval'/,
-    "script-src に 'unsafe-eval' がある。直し方: Pyodide に必要なのは 'wasm-unsafe-eval' だけ",
+test("CSP は通信先・実行できるスクリプトを最小限に絞り、Trusted Types を強制する", () => {
+  for (const name of ["index.html", BUNDLE_NAME]) {
+    const policy = csp(name);
+    assert.deepEqual(
+      policy["default-src"],
+      ["'none'"],
+      `${name}: default-src が 'none' でない`,
+    );
+    const version = read("app.js").match(
+      /PYODIDE_VERSION = "(\d+\.\d+\.\d+)"/,
+    )?.[1];
+    assert.deepEqual(
+      policy["connect-src"],
+      [`https://cdn.jsdelivr.net/pyodide/v${version}/full/`],
+      `${name}: connect-src が Pyodide の配布フォルダ以外を許している。直し方: ファイルの中身を送れる送信先を増やさない`,
+    );
+    for (const directive of ["script-src", "style-src"]) {
+      for (const bad of [
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https:",
+        "*",
+        "data:",
+      ]) {
+        assert.ok(
+          !policy[directive]?.includes(bad),
+          `${name}: ${directive} に ${bad} がある。直し方: インラインはハッシュで、外部は 1 ファイル単位の URL で許可する`,
+        );
+      }
+    }
+    const external = policy["script-src"].filter((s) => s.startsWith("https:"));
+    const scriptTags = [
+      ...read(name).matchAll(/<script\s[^>]*src="(https:[^"]+)"/g),
+    ].map((m) => m[1]);
+    assert.deepEqual(
+      external,
+      scriptTags,
+      `${name}: script-src の外部 URL が <script src> と一致しない（CDN 全体やフォルダ単位で許していないか）。直し方: <script src> と同じ URL をファイル単位で書く`,
+    );
+    assert.deepEqual(
+      policy["require-trusted-types-for"],
+      ["'script'"],
+      `${name}: Trusted Types が強制されていない。直し方: require-trusted-types-for 'script' を戻す`,
+    );
+    for (const d of ["base-uri", "form-action", "object-src"]) {
+      assert.deepEqual(policy[d], ["'none'"], `${name}: ${d} が 'none' でない`);
+    }
+  }
+});
+
+test("CSV 書き出しは表計算ソフトの数式として実行される値を無害化する", () => {
+  const { toCsv } = loadAppFunctions();
+  const lines = toCsv(
+    ["列"],
+    [
+      ['=HYPERLINK("http://evil.example","x")'],
+      ["-2+3+cmd|' /C calc'!A0"],
+      ["+1+1"],
+      ["@SUM(A1)"],
+      ["\t=1"],
+      ["-5"],
+      ["1.5e3"],
+      [-7],
+      ["普通の文字"],
+    ],
+  )
+    .replace(/^\ufeff/, "")
+    .split("\r\n");
+  assert.deepEqual(
+    lines.slice(1),
+    [
+      `"'=HYPERLINK(""http://evil.example"",""x"")"`,
+      "'-2+3+cmd|' /C calc'!A0",
+      "'+1+1",
+      "'@SUM(A1)",
+      "'\t=1",
+      "-5",
+      "1.5e3",
+      "-7",
+      "普通の文字",
+    ],
+    "数式として実行されうるセルに ' が付いていない（または数値に余計な ' が付いた）。直し方: app.js の csvCell",
   );
 });
 
@@ -109,13 +227,19 @@ test("読み込んだデータを HTML として解釈する API を使ってい
     /document\.write/,
     /\beval\(/,
     /new Function\(/,
+    /renderMode:\s*"html"/,
   ]) {
     assert.doesNotMatch(
       app,
       pattern,
-      `app.js に ${pattern} がある。ファイル内の文字列で HTML やスクリプトが実行されうる。直し方: h() と textContent を使う`,
+      `app.js に ${pattern} がある。ファイル内の文字列で HTML やスクリプトが実行されうる。直し方: h() と textContent を使い、ツールチップは renderMode: "richText" にする`,
     );
   }
+  assert.match(
+    app,
+    /renderMode: "richText"/,
+    'ツールチップが HTML 描画になっている。直し方: base() の tooltip に renderMode: "richText" を戻す',
+  );
 });
 
 test("Python 解析エンジンの単体テストが通る", (t) => {

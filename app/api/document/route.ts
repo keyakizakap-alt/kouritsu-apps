@@ -2,15 +2,22 @@ import mammoth from "mammoth";
 import readExcelFile from "read-excel-file/node";
 import { readPdf } from "@/lib/pdf";
 import {
+  acquireSlot,
+  assertSafeZip,
   assertSameSite,
   hasExpectedSignature,
   rateLimit,
+  readLimitedBody,
 } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
+// multipart の境界や項目名の分を含めた、リクエスト本文の上限
+const MAX_BODY_BYTES = MAX_FILE_BYTES + 512_000;
+// OCR は CPU とメモリを多く使うため、全体での同時実行数を絞る
+const MAX_CONCURRENT = 2;
 const MAX_TEXT_LENGTH = 100_000;
 const allowed = new Set(["pdf", "docx", "xlsx", "txt", "md", "csv", "json"]);
 
@@ -25,15 +32,22 @@ function cellText(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  let release = () => {};
   try {
     assertSameSite(request);
     const limited = rateLimit(request, "document", 4);
     if (limited) return limited;
-    if (!request.headers.get("content-type")?.includes("multipart/form-data"))
+    const slot = acquireSlot("document", MAX_CONCURRENT);
+    if (slot.response) return slot.response;
+    release = slot.release;
+    const contentType = request.headers.get("content-type") || "";
+    if (!contentType.includes("multipart/form-data"))
       throw Error("content-type");
-    const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > MAX_FILE_BYTES + 512_000) throw Error("size");
-    const form = await request.formData();
+    // request.formData() は本文を上限なしで読み込むため、先に上限つきで読んでから解析する
+    const body = await readLimitedBody(request, MAX_BODY_BYTES);
+    const form = await new Response(body, {
+      headers: { "content-type": contentType },
+    }).formData();
     const file = form.get("file");
     if (!(file instanceof File) || !file.size || file.size > MAX_FILE_BYTES)
       throw Error("file");
@@ -41,6 +55,7 @@ export async function POST(request: Request) {
     if (!allowed.has(ext)) throw Error("type");
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (!hasExpectedSignature(ext, bytes)) throw Error("signature");
+    if (ext === "docx" || ext === "xlsx") assertSafeZip(bytes);
     let text = "";
     let extractionMode = "テキストを抽出";
     let pages: number | undefined;
@@ -101,5 +116,7 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  } finally {
+    release();
   }
 }

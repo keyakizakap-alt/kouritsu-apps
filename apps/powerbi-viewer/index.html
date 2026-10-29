@@ -4,12 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!--
-      ファイルの中身はブラウザの外へ送らない。外部へ出る通信は CDN からのライブラリ取得だけに絞る。
-      'wasm-unsafe-eval' は Pyodide（WebAssembly）の実行に、blob: は検証済みスクリプトとワーカーの起動に使う。
+      ファイルの中身はブラウザの外へ送らない。外部への通信は、ハッシュを固定した CDN のファイル取得だけに絞る。
+      - script-src: ECharts は 1 ファイルだけを URL で許可。Pyodide は Worker が検証してから blob: で実行する
+      - 'wasm-unsafe-eval': Pyodide（WebAssembly）の実行に必要。'unsafe-eval' と 'unsafe-inline' は使わない
+      - require-trusted-types-for: 文字列を HTML・スクリプトとして扱う API を、許可したポリシー経由に限る
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src https://cdn.jsdelivr.net/pyodide/v314.0.7/full/; style-src 'self'; img-src 'self' data: blob:; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types pbiv pbiv-worker default"
     />
     <meta name="referrer" content="no-referrer" />
     <title>Power BI データビューア</title>

@@ -2,15 +2,36 @@
  *
  * 解析は Web Worker 上の Pyodide（Python + pandas）が担当し、この画面は結果の JSON を描くだけにする。
  * ファイルの中身は Worker に渡すだけで、ネットワークには送らない。
- * 読み込んだ値は信用しない: DOM には textContent で入れ、ECharts のツールチップに渡す文字列は esc() を通す。
+ *
+ * セキュリティの方針
+ * - CDN から取得するファイルは、下の PYODIDE_FILES と index.html の integrity に書いた SHA-384 と一致したものだけを使う。
+ *   Worker は一覧にない URL への通信をすべて拒否し、Python の準備が終わったら通信そのものを止める。
+ * - Trusted Types（CSP の require-trusted-types-for）で、文字列を HTML やスクリプトとして扱う API を禁止する。
+ *   読み込んだ値は textContent でだけ DOM に入れ、グラフのツールチップも HTML ではなくキャンバスに描く。
  */
 "use strict";
 
 const PYODIDE_VERSION = "314.0.7";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
-// pyodide.js の SHA-384。バージョンを上げるときは README の手順で再計算する
-const PYODIDE_INTEGRITY = "sha384-hYKrcQ7FiKU7f1c92md9N2eh7BoBVX4CPkNDfQyyVclsjZevvDOBUkajGcYk1EF8";
+const PYODIDE_PACKAGES = ["numpy", "pandas", "python-calamine"];
+// <pinned-cdn> 自動生成（npm run pin:powerbi-viewer）。手で編集しない
+const PYODIDE_FILES = {
+  "pyodide.js": "sha384-hYKrcQ7FiKU7f1c92md9N2eh7BoBVX4CPkNDfQyyVclsjZevvDOBUkajGcYk1EF8",
+  "pyodide.asm.mjs": "sha384-/2281iaC0Iimw0B3Kagy1DBfZcJG3W4KYW+EmOqhsdY3fR9BJ88FE2Zt6y0KQKpa",
+  "pyodide.asm.wasm": "sha384-y++qrQ72KPA1fTjLIuGMP+jppgGxjbLCgfdb0zMrnNnQVhxRUXTOTF6rTxNzllSu",
+  "python_stdlib.zip": "sha384-xW3A5jmenkrPXbsgrIaB1FCJh9OuLT7FRMagsJMgtlhVc19k/mSy3+7nMaF/d767",
+  "pyodide-lock.json": "sha384-o8SQQvpVlZnOl04+3dFTJipKxul9GbViVusA379wlOrfHSgxbzt0yPiqCTxOiYES",
+  "numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl": "sha384-cgT/tNxSJqnUWPta2IJ3V5CZ08htQgg6LvNT9SVj6Y2Y6V9BSKCjQfkBab4v5RKY",
+  "packaging-26.1-py3-none-any.whl": "sha384-DWxWg54fbYBqkW8/gEexNLlqU8TTuIhVWkkk/js3fylsqP6STKIlImUlFv6K9ikD",
+  "pandas-3.0.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl": "sha384-jfj6ryq0RuH2AvAqq8RsUpf7IxN7uOqhXwR0i7OFNITkM/u0CAXqCFqMKzHf4Phj",
+  "python_calamine-0.6.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl": "sha384-9ifhVbnU1ZUrCTBkp0vnHtxIPqBkkEkkujsnKS5e8I4VcR3cSUt9uNWERX88kmht",
+  "python_dateutil-2.9.0.post0-py2.py3-none-any.whl": "sha384-rpSv6uHjb4thgdY2GxvrsUgKrfqEhdWS/16f2ACzUYag+VfksPk7RzBb4jMkYVXg",
+  "pytz-2026.1.post1-py2.py3-none-any.whl": "sha384-SEmbN8Kz89cEdippxcDNJFMImsmVhDUo8zEa/V2BfnKqZEzPc1dRvnXWsffTjowK",
+  "six-1.17.0-py2.py3-none-any.whl": "sha384-bu6B1JwAhzC28k27YoCUICREn3lc/dH4xiFidifCXAmeDh82tBUQlHmhUNlyVDed",
+};
+// </pinned-cdn>
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const INIT_TIMEOUT_MS = 180_000;
 const COUNT = "__count__";
 const AGG_LABELS = {
   sum: "合計",
@@ -24,29 +45,117 @@ const AGG_LABELS = {
 const FREQ_LABELS = { D: "日", W: "週", M: "月", Q: "四半期", Y: "年" };
 const KIND_LABELS = { number: "数値", datetime: "日付", category: "カテゴリ", text: "テキスト" };
 
+// ------------------------------------------------------------------ Trusted Types
+
+/* この画面で作った blob: URL だけを、スクリプトとして実行してよい URL として認める。 */
+const ownBlobUrls = new Set();
+const scriptUrlPolicy = self.trustedTypes?.createPolicy("pbiv", {
+  createScriptURL(url) {
+    if (ownBlobUrls.has(url)) return url;
+    throw new TypeError("許可されていないスクリプトの URL です");
+  },
+});
+
+/* ECharts（キャンバス描画）は要素を空にするときだけ innerHTML = "" を使う。空文字以外の HTML はすべて拒否する。 */
+self.trustedTypes?.createPolicy("default", {
+  createHTML(html) {
+    if (html === "") return "";
+    throw new TypeError("HTML の挿入は許可されていません");
+  },
+});
+
+function blobScriptUrl(code) {
+  const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+  ownBlobUrls.add(url);
+  return scriptUrlPolicy ? scriptUrlPolicy.createScriptURL(url) : url;
+}
+
 // ------------------------------------------------------------------ Python エンジン（Worker）
 
 /* Worker の中身。file:// で開いても動くよう、別ファイルにせず Blob から起動する。 */
 function workerMain() {
+  "use strict";
   let api = null;
   let apiLoad = null;
   const send = (msg) => self.postMessage(msg);
+  const nativeFetch = self.fetch.bind(self);
+  const nativeImportScripts = self.importScripts.bind(self);
+  let allowed = new Map(); // 取得してよい URL → SHA-384
+
+  // 一覧にない URL への通信は拒否する。一覧にある URL は、ハッシュが一致しなければブラウザが失敗させる
+  self.fetch = (input, init = {}) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), self.location.href).href;
+    const integrity = allowed.get(url);
+    if (!integrity) return Promise.reject(new TypeError(`許可されていない通信を止めました: ${url}`));
+    return nativeFetch(url, {
+      method: "GET",
+      signal: init.signal,
+      integrity,
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+    }).catch((err) => {
+      // ハッシュ不一致も通信失敗もここに来る。Pyodide が失敗を握りつぶしても、準備はすぐ打ち切る
+      failInit(`${url.split("/").pop()} を検証付きで取得できませんでした`);
+      throw err;
+    });
+  };
+  // 外部スクリプトの読み込みは、下の verifiedScriptUrl を通したものだけにする
+  self.importScripts = () => {
+    throw new TypeError("importScripts は使えません");
+  };
+
+  const ownBlobUrls = new Set();
+  const policy = self.trustedTypes?.createPolicy("pbiv-worker", {
+    createScriptURL(url) {
+      if (ownBlobUrls.has(url)) return url;
+      throw new TypeError("許可されていないスクリプトの URL です");
+    },
+  });
+
+  const INTEGRITY_HINT = "ライブラリの検証（ハッシュ照合）に失敗しました。通信経路での改ざんや、CDN 側の差し替えの可能性があります";
+
+  // 検証に失敗した WebAssembly の読み込みなど、await で捕まえられない失敗も画面に返す
+  let initId = null;
+  function failInit(detail) {
+    if (initId === null) return;
+    allowed = new Map();
+    send({ id: initId, ok: false, error: `${INTEGRITY_HINT}（${detail}）` });
+    initId = null;
+  }
+  self.addEventListener("unhandledrejection", (event) => failInit(String(event.reason?.message || event.reason)));
+
+  async function verifiedScriptUrl(url) {
+    const res = await self.fetch(url);
+    if (!res.ok) throw new Error(`${url} を取得できません（HTTP ${res.status}）`);
+    const blobUrl = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: "text/javascript" }));
+    ownBlobUrls.add(blobUrl);
+    return policy ? policy.createScriptURL(blobUrl) : blobUrl;
+  }
 
   self.onmessage = async (event) => {
     const { id, type, payload } = event.data;
     try {
       let result;
       if (type === "init") {
+        initId = id;
+        const base = payload.indexURL;
+        allowed = new Map(Object.entries(payload.files).map(([name, hash]) => [new URL(name, base).href, hash]));
         send({ type: "progress", text: "Python ランタイムを取得中…" });
-        // CDN の改ざんに備え、ハッシュが一致したスクリプトだけを実行する
-        const res = await fetch(payload.indexURL + "pyodide.js", { integrity: payload.integrity });
-        if (!res.ok) throw new Error(`pyodide.js を取得できません（HTTP ${res.status}）`);
-        const url = URL.createObjectURL(await res.blob());
-        importScripts(url);
-        URL.revokeObjectURL(url);
-        const pyodide = await self.loadPyodide({ indexURL: payload.indexURL });
+        nativeImportScripts(await verifiedScriptUrl(base + "pyodide.js"));
+        // pyodide.asm.mjs も検証してから読み込み、Pyodide 自身には CDN から直接 import させない
+        const asm = await import(await verifiedScriptUrl(base + "pyodide.asm.mjs"));
+        const pyodide = await self.loadPyodide({ indexURL: base, createPyodideModule: asm.default });
         send({ type: "progress", text: "pandas を読み込み中…" });
-        await pyodide.loadPackage(["numpy", "pandas", "python-calamine"]);
+        const packageErrors = [];
+        await pyodide.loadPackage(payload.packages, {
+          checkIntegrity: true,
+          messageCallback: () => {},
+          errorCallback: (message) => packageErrors.push(message),
+        });
+        if (packageErrors.length) throw new Error(`${INTEGRITY_HINT}（${packageErrors[0]}）`);
+        // 以後、Worker からの通信は一切しない
+        allowed = new Map();
         send({ type: "progress", text: "解析エンジンを初期化中…" });
         const ns = pyodide.globals.get("dict")();
         ns.set("__name__", "analysis");
@@ -54,6 +163,7 @@ function workerMain() {
         api = ns.get("api");
         apiLoad = ns.get("api_load");
         result = pyodide.version;
+        initId = null;
       } else if (type === "load") {
         result = apiLoad(payload.bytes, payload.name, payload.sheet ?? null);
       } else {
@@ -61,6 +171,8 @@ function workerMain() {
       }
       send({ id, ok: true, result });
     } catch (err) {
+      allowed = new Map();
+      if (type === "init") initId = null;
       send({ id, ok: false, error: String((err && err.message) || err) });
     }
   };
@@ -89,8 +201,7 @@ const engine = (() => {
       ready = Promise.reject(new Error("analysis.py.js がありません。npm run build:powerbi-viewer を実行してください"));
       return ready;
     }
-    const blob = new Blob([`(${workerMain.toString()})();`], { type: "text/javascript" });
-    worker = new Worker(URL.createObjectURL(blob));
+    worker = new Worker(blobScriptUrl(`(${workerMain.toString()})();`));
     worker.onmessage = ({ data }) => {
       if (data.type === "progress") return setEngine("loading", data.text);
       const p = pending.get(data.id);
@@ -99,12 +210,18 @@ const engine = (() => {
       data.ok ? p.resolve(data.result) : p.reject(new Error(data.error));
     };
     worker.onerror = (e) => setEngine("error", `Python を起動できません: ${e.message || "不明なエラー"}`);
-    ready = rpc("init", { indexURL: PYODIDE_URL, integrity: PYODIDE_INTEGRITY, source }).then(
+    const init = rpc("init", { indexURL: PYODIDE_URL, files: PYODIDE_FILES, packages: PYODIDE_PACKAGES, source });
+    // 応答が返らないまま止まった場合に備え、一定時間で打ち切って Worker を止める
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("3分以内に準備が終わりませんでした")), INIT_TIMEOUT_MS),
+    );
+    ready = Promise.race([init, timeout]).then(
       (version) => setEngine("ready", `Python 準備完了（Pyodide ${version}）`),
       (err) => {
+        worker.terminate();
         setEngine("error", "Python を読み込めませんでした");
         throw new UserFacingError(
-          `解析エンジン（Pyodide）を読み込めませんでした: ${err.message}\n直し方: インターネット接続と、cdn.jsdelivr.net への通信が許可されているか確認してページを再読み込みしてください。`,
+          `解析エンジン（Pyodide）を読み込めませんでした: ${err.message}\n直し方: インターネット接続と、cdn.jsdelivr.net への通信が許可されているか確認してページを再読み込みしてください。改ざん検知（ハッシュ不一致）で止まった場合は、配布元に連絡してください。`,
         );
       },
     );
@@ -154,10 +271,6 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-function esc(value) {
-  return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-}
-
 const nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
 const nfSmall = new Intl.NumberFormat("ja-JP", { maximumSignificantDigits: 4 });
 const nfCompact = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumSignificantDigits: 3 });
@@ -191,13 +304,19 @@ function download(filename, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// 表計算ソフトが数式として実行する先頭文字（OWASP「CSV Injection」）。「-2+3+cmd|…」のように数字で始まる式もある
+const FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
+
+function csvCell(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  // 文字列の値で、数値そのものではないものが数式の先頭文字で始まるときは ' を付けて文字列として扱わせる
+  const safe = typeof v === "string" && FORMULA_START.test(s) && !PLAIN_NUMBER.test(s) ? `'${s}` : s;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
 function toCsv(header, rows) {
-  const cell = (v) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    // 先頭が = + - @ のセルは Excel で数式として実行されないよう ' を付ける
-    const safe = /^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s) ? `'${s}` : s;
-    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-  };
+  const cell = csvCell;
   return "﻿" + [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
 }
 
@@ -641,10 +760,9 @@ function chartCard({ key, title, sub, chartBuilder, table, csv, tall, height }) 
       onclick: () => {
         if (!chart) return;
         toggle("chart");
+        // data: URL を fetch すると CSP（connect-src）で止まるため、自分でバイト列に戻す
         const url = chart.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: tokens().surface });
-        fetch(url)
-          .then((r) => r.blob())
-          .then((b) => download(`${baseName()}_${key}.png`, b));
+        download(`${baseName()}_${key}.png`, dataUrlToBlob(url));
       },
     },
     "PNG",
@@ -713,8 +831,20 @@ function base(t) {
       borderColor: t.hairline,
       borderWidth: 1,
       padding: [8, 12],
-      textStyle: { color: t.ink, fontSize: 12 },
-      extraCssText: "border-radius:10px;box-shadow:0 8px 24px -12px rgba(0,0,0,.35);",
+      // HTML ではなくキャンバスに描く（読み込んだ文字列を HTML として扱う経路をなくす）
+      renderMode: "richText",
+      textStyle: {
+        color: t.ink,
+        fontSize: 12,
+        lineHeight: 20,
+        fontFamily: t.font,
+        rich: {
+          muted: { color: t.muted, fontSize: 12, lineHeight: 20 },
+          value: { color: t.ink, fontSize: 12, lineHeight: 20, fontWeight: "bold" },
+          so: { color: t.other, fontSize: 12, lineHeight: 20 },
+          ...Object.fromEntries(t.series.map((c, i) => [`s${i}`, { color: c, fontSize: 12, lineHeight: 20 }])),
+        },
+      },
       confine: true,
     },
   };
@@ -742,9 +872,28 @@ function categoryAxis(t, data, extra = {}) {
   };
 }
 
-function tipRow(color, name, value) {
-  const dot = color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${esc(color)};margin-right:6px"></span>` : "";
-  return `<div style="display:flex;gap:16px;justify-content:space-between"><span>${dot}${esc(name)}</span><b style="font-variant-numeric:tabular-nums">${esc(value)}</b></div>`;
+/** ツールチップ用の文字列。ECharts のリッチテキスト記法 {名前|…} の開始として解釈されないよう、{ の直後にゼロ幅スペースを入れる。 */
+function rt(value) {
+  return String(value).replace(/\{/g, "{\u200b");
+}
+
+// 読み込んだ値は装飾の {…|…} で囲まない（値に } があると囲みが途中で閉じるため）。装飾するのは自前の数値だけ
+const tipTitle = (text) => rt(text);
+
+function tipRow(t, color, name, value) {
+  const i = color ? t.series.indexOf(color) : -1;
+  const dot = color ? `{${i >= 0 ? `s${i}` : "so"}|●} ` : "";
+  return `${dot}${rt(name)}   {value|${rt(value)}}`;
+}
+
+const tip = (...lines) => lines.filter(Boolean).join("\n");
+
+function dataUrlToBlob(url) {
+  const [head, data] = url.split(",");
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: head.slice(5).split(";")[0] });
 }
 
 /** 系列名ごとに色を固定する。初めて見た名前から順に色番号を割り当て、8色を超えたら灰色。 */
@@ -861,7 +1010,7 @@ async function renderGroup() {
       tooltip: {
         ...base(t).tooltip,
         trigger: "item",
-        formatter: (p) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(p.name)}</div>${tipRow(p.color, label, fmt(p.value))}${res.total ? tipRow(null, "構成比", share(p.value)) : ""}`,
+        formatter: (p) => tip(tipTitle(p.name), tipRow(t, p.color, label, fmt(p.value)), res.total && tipRow(t, null, "構成比", share(p.value))),
       },
       xAxis: valueAxis(t),
       yAxis: categoryAxis(t, rows.map((r) => r.label), { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 160, overflow: "truncate" } }),
@@ -918,7 +1067,7 @@ async function renderTrend() {
         ...base(t).tooltip,
         trigger: "axis",
         axisPointer: { type: "line", lineStyle: { color: t.baseline } },
-        formatter: (ps) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(ps[0].axisValue)}</div>${ps.map((p) => tipRow(p.color, multi ? p.seriesName : label, fmt(p.value))).join("")}`,
+        formatter: (ps) => tip(tipTitle(ps[0].axisValue), ...ps.map((p) => tipRow(t, p.color, multi ? p.seriesName : label, fmt(p.value)))),
       },
       xAxis: categoryAxis(t, res.periods, { boundaryGap: false }),
       yAxis: valueAxis(t),
@@ -988,7 +1137,7 @@ async function renderDist() {
         trigger: "item",
         formatter: (p) => {
           const b = res.bins[p.dataIndex];
-          return `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(fmt(b.from))} 〜 ${esc(fmt(b.to))}</div>${tipRow(p.color, "件数", fmt(b.count))}${tipRow(null, "割合", `${((b.count / s.count) * 100).toFixed(1)}%`)}`;
+          return tip(tipTitle(`${fmt(b.from)} 〜 ${fmt(b.to)}`), tipRow(t, p.color, "件数", fmt(b.count)), tipRow(t, null, "割合", `${((b.count / s.count) * 100).toFixed(1)}%`));
         },
       },
       xAxis: categoryAxis(t, labels),
@@ -1021,7 +1170,7 @@ async function renderCorr() {
       tooltip: {
         ...base(t).tooltip,
         trigger: "item",
-        formatter: (p) => `${esc(res.columns[p.value[1]])} × ${esc(res.columns[p.value[0]])}<br/><b>r = ${p.value[2] === null ? "—" : p.value[2].toFixed(3)}</b>`,
+        formatter: (p) => tip(tipTitle(`${res.columns[p.value[1]]} × ${res.columns[p.value[0]]}`), tipRow(t, null, "r", p.value[2] === null ? "—" : p.value[2].toFixed(3))),
       },
       xAxis: categoryAxis(t, res.columns, { axisLabel: { color: t.ink2, rotate: n > 5 ? 30 : 0, width: 120, overflow: "truncate" }, axisLine: { show: false }, splitArea: { show: false } }),
       yAxis: categoryAxis(t, res.columns, { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 140, overflow: "truncate" } }),
@@ -1078,7 +1227,7 @@ async function renderPivot() {
       tooltip: {
         ...base(t).tooltip,
         trigger: "item",
-        formatter: (p) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(res.rows[p.value[1]])} × ${esc(res.columns[p.value[0]])}</div>${tipRow(null, label, fmt(p.value[2]))}`,
+        formatter: (p) => tip(tipTitle(`${res.rows[p.value[1]]} × ${res.columns[p.value[0]]}`), tipRow(t, null, label, fmt(p.value[2]))),
       },
       xAxis: categoryAxis(t, res.columns, { position: "top", axisLine: { show: false }, axisLabel: { color: t.ink2, width: 100, overflow: "truncate", interval: 0, rotate: res.columns.length > 6 ? 30 : 0 } }),
       yAxis: categoryAxis(t, res.rows, { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 140, overflow: "truncate", interval: 0 } }),

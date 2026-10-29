@@ -12,6 +12,7 @@ import json
 import math
 import re
 import unicodedata
+import zipfile
 from datetime import date, datetime
 from typing import Any
 
@@ -29,6 +30,16 @@ BLANK_LABEL = "(空白)"
 COUNT_KEY = "__count__"
 AGGS = {"sum", "mean", "median", "min", "max", "count", "nunique"}
 FREQS = {"D": "日", "W": "週", "M": "月", "Q": "四半期", "Y": "年"}
+
+# 悪意のある（または壊れた）ファイルでブラウザのメモリを使い切らないための上限
+ZIP_EXCEL = (".xlsx", ".xlsm", ".xlsb", ".ods")
+MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024  # 展開後の合計（zip 爆弾対策）
+MAX_ZIP_ENTRIES = 10_000
+MAX_COMPRESSION_RATIO = 500  # 1MB を超える要素の圧縮率の上限
+MAX_CELLS = 30_000_000  # 行数 × 列数
+MAX_PERIODS = 5_000  # 時系列の期間数
+MAX_TOP = 500  # 集計で個別に返すグループ数
+MAX_FILTER_VALUES = 10_000
 
 # Power BI の Excel エクスポートは 1 行目に「Applied filters: …」、上限を超えると末尾に
 # 「Exported data exceeded the allowed volume. …」を書き込む（Microsoft Learn「Export data from a Power BI visualization」）
@@ -68,6 +79,8 @@ def read_table(data: bytes, filename: str, sheet: str | None = None) -> tuple[pd
     name = filename.lower()
     info: dict[str, Any] = {"sheets": [], "sheet": None, "encoding": None, "delimiter": None}
     if name.endswith((".xlsx", ".xlsm", ".xls", ".xlsb", ".ods")):
+        if name.endswith(ZIP_EXCEL):
+            check_zip(data)
         try:
             book = pd.ExcelFile(io.BytesIO(data), engine="calamine")
         except Exception as exc:  # noqa: BLE001 - 壊れたファイルの種類は多い
@@ -99,10 +112,36 @@ def read_table(data: bytes, filename: str, sheet: str | None = None) -> tuple[pd
         info.update(encoding=encoding, delimiter={",": "カンマ", "\t": "タブ", ";": "セミコロン", "|": "パイプ"}[delimiter])
     else:
         raise UserError("対応していない形式です。直し方: .csv / .xlsx / .xls ファイルを選んでください。")
+    if df.shape[0] * df.shape[1] > MAX_CELLS:
+        raise UserError(
+            f"セルが多すぎるため開けません（{df.shape[0]:,} 行 × {df.shape[1]:,} 列）。"
+            "直し方: 3,000 万セル以下になるよう、列や期間を絞ってエクスポートしてください。"
+        )
     df, notes = clean_frame(df)
     info["notes"] = notes
     info["truncated"] = any(TRUNCATED.search(n) for n in notes)
     return df, info
+
+
+def check_zip(data: bytes) -> None:
+    """展開する前に、zip の目録（中央ディレクトリ）で展開後のサイズと要素数を確かめる。"""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError) as exc:
+        raise UserError(
+            "Excel ファイルが壊れているか、Excel 形式ではありません。"
+            "直し方: Power BI から .xlsx で再エクスポートするか、Excel で開いて保存し直してください。"
+        ) from exc
+    too_large = UserError(
+        "展開後のサイズが大きすぎるため開けません（512MB まで）。"
+        "直し方: Power BI 側で列や期間を絞ってエクスポートし直してください。"
+    )
+    if len(infos) > MAX_ZIP_ENTRIES or sum(i.file_size for i in infos) > MAX_UNCOMPRESSED_BYTES:
+        raise too_large
+    for i in infos:
+        if i.file_size > 1024 * 1024 and i.file_size > MAX_COMPRESSION_RATIO * max(i.compress_size, 1):
+            raise too_large
 
 
 def pick_sheet(book: pd.ExcelFile, sheets: list[str]) -> str:
@@ -268,16 +307,28 @@ class Dataset:
         return df[mask]
 
     def set_filters(self, filters: dict) -> None:
+        if not isinstance(filters, dict):
+            raise UserError("フィルターの形式が正しくありません。")
         clean = {}
         for col, f in filters.items():
             self.require(col)
+            if not isinstance(f, dict):
+                raise UserError(f"列「{col}」のフィルターの形式が正しくありません。")
             if f.get("type") == "in" and isinstance(f.get("values"), list):
+                if len(f["values"]) > MAX_FILTER_VALUES:
+                    raise UserError(f"選択できる値は {MAX_FILTER_VALUES:,} 件までです。直し方: 検索で絞り込んでから選んでください。")
                 clean[col] = {"type": "in", "values": [str(v) for v in f["values"]]}
             elif f.get("type") == "range":
                 lo, hi = f.get("min"), f.get("max")
-                if self.kinds[col] == "number":
-                    lo = float(lo) if lo not in (None, "") else None
-                    hi = float(hi) if hi not in (None, "") else None
+                try:
+                    if self.kinds[col] == "number":
+                        lo = float(lo) if lo not in (None, "") else None
+                        hi = float(hi) if hi not in (None, "") else None
+                    elif self.kinds[col] == "datetime":
+                        lo = pd.Timestamp(lo).strftime("%Y-%m-%d") if lo else None
+                        hi = pd.Timestamp(hi).strftime("%Y-%m-%d") if hi else None
+                except (TypeError, ValueError) as exc:
+                    raise UserError(f"列「{col}」の範囲に、数値や日付として読めない値があります。") from exc
                 if lo is not None or hi is not None:
                     clean[col] = {"type": "range", "min": lo, "max": hi}
         self.filters = clean
@@ -436,6 +487,7 @@ def group(dimension: str, measure: str | None, agg: str = "sum", top: int = 15, 
     values = None if measure in (None, "", COUNT_KEY) else view[ds.require(measure, "number")]
     if values is None:
         agg = "count"
+    top = max(1, min(int(top), MAX_TOP))
     labels = label_series(view[dim])
     result = aggregate_series(values, [labels], agg if values is not None else "sum", view.index)
     result = result.dropna().sort_values(ascending=False, kind="stable")
@@ -466,6 +518,13 @@ def timeseries(
     vals = values[valid] if values is not None else None
     if periods.empty:
         return {"periods": [], "series": [], "freq": freq}
+    span = periods.max().ordinal - periods.min().ordinal + 1
+    if span > MAX_PERIODS:
+        raise UserError(
+            f"期間が {span:,} 区間になり、表示できる上限（{MAX_PERIODS:,}）を超えます。"
+            f"直し方: 単位を「{FREQS[freq]}」より大きく（月・四半期・年など）するか、日付のフィルターで期間を絞ってください。"
+        )
+    max_series = max(1, min(int(max_series), 8))
     full = pd.period_range(periods.min(), periods.max(), freq=freq)
     groups_key = [periods]
     names = [None]
@@ -539,6 +598,8 @@ def correlation(limit: int = 15) -> dict:
 def pivot(row: str, column: str, measure: str | None, agg: str = "sum", max_rows: int = 30, max_cols: int = 12) -> dict:
     ds = current()
     view = ds.view()
+    max_rows = max(1, min(int(max_rows), 100))
+    max_cols = max(1, min(int(max_cols), 50))
     r = ds.require(row, "category")
     c = ds.require(column, "category")
     values = None if measure in (None, "", COUNT_KEY) else view[ds.require(measure, "number")]

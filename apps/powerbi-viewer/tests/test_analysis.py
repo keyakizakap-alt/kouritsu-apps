@@ -8,6 +8,7 @@ import io
 import json
 import sys
 import unittest
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -119,6 +120,47 @@ class ReadTest(unittest.TestCase):
         res = load(b"not a zip", "broken.xlsx")
         self.assertFalse(res["ok"])
         self.assertIn("直し方", res["error"])
+
+
+class LimitTest(unittest.TestCase):
+    """悪意のある・壊れたファイルでブラウザのメモリを使い切らないこと。"""
+
+    def test_zip_bomb_is_rejected_before_parsing(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            with zf.open("xl/worksheets/sheet1.xml", "w") as f:
+                chunk = b"\0" * (1024 * 1024)
+                for _ in range(64):
+                    f.write(chunk)
+        res = load(buf.getvalue(), "bomb.xlsx")
+        self.assertFalse(res["ok"], "圧縮率の極端な zip を展開しようとしている。直し方: analysis.check_zip")
+        self.assertIn("展開後のサイズが大きすぎる", res["error"])
+
+    def test_non_zip_xlsx_is_rejected(self):
+        res = load(b"PK\x03\x04 broken", "broken.xlsx")
+        self.assertFalse(res["ok"])
+        self.assertIn("直し方", res["error"])
+
+    def test_too_many_periods_is_rejected(self):
+        csv = "日付,値\n1900-01-01,1\n2099-12-31,2\n"
+        load(csv.encode(), "range.csv")
+        res = json.loads(analysis.api("timeseries", json.dumps({"date_column": "日付", "measure": "値", "freq": "D"})))
+        self.assertFalse(res["ok"], "日単位で 7 万区間を作ろうとしている。直し方: timeseries の MAX_PERIODS")
+        self.assertIn("直し方", res["error"])
+        self.assertTrue(call("timeseries", date_column="日付", measure="値", freq="Y")["periods"], "年単位なら表示できるべき")
+
+    def test_malformed_filters_are_user_errors(self):
+        call("load_sample")
+        for filters in ({"地域": "関東"}, {"売上": {"type": "range", "min": "abc"}}, {"地域": {"type": "in", "values": ["x"] * 10_001}}):
+            res = json.loads(analysis.api("set_filters", json.dumps({"filters": filters}, ensure_ascii=False)))
+            self.assertFalse(res["ok"], f"不正なフィルター {str(filters)[:40]} を受け付けている")
+            self.assertNotIn("処理中にエラー", res["error"], "想定外の例外になっている。直し方: Dataset.set_filters で UserError にする")
+
+    def test_requested_sizes_are_clamped(self):
+        call("load_sample")
+        self.assertLessEqual(len(call("group", dimension="地域", measure=None, top=10**9)["rows"]), analysis.MAX_TOP)
+        self.assertLessEqual(len(call("preview", size=10**9)["rows"]), 500)
+        self.assertLessEqual(len(call("histogram", column="売上", bins=10**9)["bins"]), 200)
 
 
 class AnalysisTest(unittest.TestCase):
