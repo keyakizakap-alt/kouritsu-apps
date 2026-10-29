@@ -90,7 +90,7 @@ APIキーに公開用の接頭辞を付けないでください。秘密値は�
 
 ## 同梱アプリ: Power BI データビューア
 
-`apps/powerbi-viewer/` に、Power BI からエクスポートした CSV / Excel をブラウザだけで可視化する静的アプリがあります（Next.js とは独立。サーバー不要）。使い方・構成は [apps/powerbi-viewer/README.md](apps/powerbi-viewer/README.md) を参照してください。
+`apps/powerbi-viewer/` に、Power BI からエクスポートした CSV / Excel をブラウザだけで可視化する静的アプリがあります（Next.js とは独立。サーバー不要）。配布用の1ファイル版は `apps/powerbi-viewer/powerbi-viewer.html` です。使い方・構成は [apps/powerbi-viewer/README.md](apps/powerbi-viewer/README.md) を参照してください。
 
 ## 運用上の範囲
 

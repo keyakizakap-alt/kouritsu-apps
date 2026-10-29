@@ -1,0 +1,2637 @@
+<!doctype html>
+<!-- 自動生成ファイル。編集しない。元: apps/powerbi-viewer/ / 再生成: npm run build:powerbi-viewer -->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      ファイルの中身はブラウザの外へ送らない。外部へ出る通信は CDN からのライブラリ取得だけに絞る。
+      'wasm-unsafe-eval' は Pyodide（WebAssembly）の実行に、blob: は検証済みスクリプトとワーカーの起動に使う。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'sha256-8Raig/YPc1vsvlIohWoOsZiwZEjD8jx1jPDtlUfEDiM=' 'sha256-Plp/KyHr3N20Dw9wwfGqXwoTFnT0MimjU6xCF9HvDHo=' https://cdn.jsdelivr.net blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Power BI データビューア</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Crect x='8' y='15' width='4' height='9' rx='1.5' fill='%23fff'/%3E%3Crect x='14' y='10' width='4' height='14' rx='1.5' fill='%23fff'/%3E%3Crect x='20' y='6' width='4' height='18' rx='1.5' fill='%23fff'/%3E%3C/svg%3E" />
+    <style>
+/* Power BI データビューア
+   色はすべてトークン経由で指定する。ライト / ダークはそれぞれ選んだ値（自動反転ではない）。 */
+
+:root {
+  color-scheme: light;
+  --page: #f6f6f3;
+  --surface: #fcfcfb;
+  --surface-2: #f1f0ec;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --hairline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --accent-ink: #1c5cab;
+  --accent-wash: rgba(42, 120, 214, 0.08);
+  --critical: #d03b3b;
+  --warning-bg: #fff6e0;
+  --warning-ink: #6b4a00;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 8px 24px -12px rgba(11, 11, 11, 0.12);
+
+  /* チャート（dataviz 参照パレット・ライト） */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+  --series-other: #b4b2aa;
+  --seq-low: #cde2fb;
+  --seq-high: #104281;
+  --div-neg: #d03b3b;
+  --div-mid: #f0efec;
+  --div-pos: #2a78d6;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: #2c2c2a;
+    --baseline: #383835;
+    --ring: rgba(255, 255, 255, 0.1);
+    --accent: #3987e5;
+    --accent-ink: #86b6ef;
+    --accent-wash: rgba(57, 135, 229, 0.14);
+    --critical: #e66767;
+    --warning-bg: #2e2510;
+    --warning-ink: #f3cf7a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #5d5c57;
+    --seq-low: #1f2c3d;
+    --seq-high: #86b6ef;
+    --div-neg: #e66767;
+    --div-mid: #383835;
+    --div-pos: #3987e5;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --hairline: #2c2c2a;
+  --baseline: #383835;
+  --ring: rgba(255, 255, 255, 0.1);
+  --accent: #3987e5;
+  --accent-ink: #86b6ef;
+  --accent-wash: rgba(57, 135, 229, 0.14);
+  --critical: #e66767;
+  --warning-bg: #2e2510;
+  --warning-ink: #f3cf7a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --series-other: #5d5c57;
+  --seq-low: #1f2c3d;
+  --seq-high: #86b6ef;
+  --div-neg: #e66767;
+  --div-mid: #383835;
+  --div-pos: #3987e5;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--page);
+  color: var(--ink);
+  font: 400 15px/1.65 var(--font);
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--page);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+/* ---------------------------------------------------------------- 上部バー */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px max(16px, calc((100vw - 1360px) / 2));
+  background: color-mix(in srgb, var(--page) 86%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.brand-mark rect:first-child {
+  fill: var(--accent);
+}
+
+.brand-mark rect:not(:first-child) {
+  fill: #fff;
+}
+
+.brand-name {
+  font-weight: 650;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.engine-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.engine[data-state="ready"] .engine-dot {
+  background: #0ca30c;
+  animation: none;
+}
+
+.engine[data-state="error"] .engine-dot {
+  background: var(--critical);
+  animation: none;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+}
+
+/* ---------------------------------------------------------------- ボタン・入力 */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn:hover {
+  background: var(--surface-2);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-ink);
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn[aria-pressed="true"] {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent-ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+select,
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="text"] {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+select:hover,
+input:hover {
+  border-color: var(--baseline);
+}
+
+/* ---------------------------------------------------------------- ランディング */
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.landing {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 64px 0 48px;
+  display: grid;
+  gap: 28px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--accent-ink);
+  margin-bottom: 12px;
+}
+
+.landing h1 {
+  font-size: clamp(28px, 4.6vw, 44px);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.lead {
+  margin-top: 16px;
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: 16px;
+}
+
+.dropzone {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  border-radius: 20px;
+  border: 1.5px dashed var(--baseline);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.is-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.dropzone.is-over {
+  transform: scale(1.01);
+}
+
+.dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropzone:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.dropzone-icon {
+  width: 44px;
+  height: 44px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-bottom: 4px;
+}
+
+.dropzone-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dropzone-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.landing-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: -12px;
+}
+
+.error {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--critical) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--critical) 35%, transparent);
+  color: var(--ink);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.error::before {
+  content: "⚠ ";
+  color: var(--critical);
+}
+
+.steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.steps li {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.step-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.step-text {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------- ワークスペース */
+
+.workspace {
+  padding: 20px 0 40px;
+}
+
+.filebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.file-meta {
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 20px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.file-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  font-size: 13px;
+}
+
+.notice-info {
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.filters {
+  position: sticky;
+  top: 76px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-head h2 {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.chips:empty::before {
+  content: "フィルターは未設定です。全件を集計しています。";
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-wash);
+  font-size: 12px;
+}
+
+.chip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-text b {
+  font-weight: 600;
+}
+
+.chip button {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.chip button:hover {
+  background: var(--surface);
+}
+
+.filter-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.filter-editor .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.checklist {
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.checklist label:hover {
+  background: var(--surface);
+}
+
+.checklist .count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.checklist .val {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- KPI */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi {
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi-value {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.kpi-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------- タブ */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 16px;
+}
+
+.tabs button {
+  flex: none;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.tabs button:hover {
+  color: var(--ink);
+}
+
+.tabs button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px var(--ring), 0 0 0 1px var(--ring);
+}
+
+/* ---------------------------------------------------------------- カード */
+
+.tab-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  padding: 18px;
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.card-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.chart {
+  width: 100%;
+  height: 420px;
+}
+
+.chart-tall {
+  height: 520px;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 16px;
+}
+
+.insights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.insights li {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.insights li::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.stat {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.stat dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stat dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- 表 */
+
+.table-wrap {
+  overflow: auto;
+  max-height: 560px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+tbody tr:hover {
+  background: var(--accent-wash);
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+td.null {
+  color: var(--muted);
+}
+
+th button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+th button::after {
+  content: " ↕";
+  color: var(--muted);
+  font-size: 10px;
+}
+
+th button[data-dir="asc"]::after {
+  content: " ↑";
+  color: var(--accent-ink);
+}
+
+th button[data-dir="desc"]::after {
+  content: " ↓";
+  color: var(--accent-ink);
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.badge[data-kind="number"] {
+  background: color-mix(in srgb, var(--series-1) 14%, transparent);
+  color: var(--accent-ink);
+}
+
+.badge[data-kind="datetime"] {
+  background: color-mix(in srgb, var(--series-3) 16%, transparent);
+}
+
+.badge[data-kind="category"] {
+  background: color-mix(in srgb, var(--series-7) 14%, transparent);
+}
+
+.meter {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  background: var(--series-4);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.pager-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------------------------------------------------------------- 処理中 */
+
+.busy {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+}
+
+.busy-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--page);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--page) 35%, transparent);
+  border-top-color: var(--page);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.footer {
+  padding: 24px 16px 32px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- レスポンシブ */
+
+@media (max-width: 1080px) {
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters {
+    position: static;
+    max-height: none;
+  }
+
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .landing {
+    padding-top: 36px;
+  }
+
+  .brand-sub,
+  #engine-text {
+    display: none;
+  }
+
+  .engine {
+    padding: 8px;
+  }
+
+  .chart {
+    height: 340px;
+  }
+
+  .chart-tall {
+    height: 440px;
+  }
+
+  .kpi-value {
+    font-size: 22px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .tabs button[aria-selected="true"] {
+    outline: 2px solid CanvasText;
+  }
+}
+</style>
+    <script
+      src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"
+      integrity="sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"
+      crossorigin="anonymous"
+      defer
+    ></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" />
+          <rect x="8" y="15" width="4" height="9" rx="1.5" />
+          <rect x="14" y="10" width="4" height="14" rx="1.5" />
+          <rect x="20" y="6" width="4" height="18" rx="1.5" />
+        </svg>
+        <div>
+          <p class="brand-name">Power BI データビューア</p>
+          <p class="brand-sub">CSV・Excel をブラウザ内で可視化</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="engine" id="engine" role="status" aria-live="polite">
+          <span class="engine-dot" aria-hidden="true"></span>
+          <span id="engine-text">Python を準備中…</span>
+        </span>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="表示テーマを切り替える" title="テーマ切替">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- 読み込み前 -->
+      <section class="landing" id="landing">
+        <div class="landing-copy">
+          <p class="eyebrow">ローカル完結・インストール不要</p>
+          <h1>Power BI から出したデータを、<br />その場でグラフに。</h1>
+          <p class="lead">
+            エクスポートした CSV / Excel を選ぶだけで、集計・推移・分布・相関・クロス集計を表示します。
+            解析は Python（pandas）がブラウザ内で実行し、ファイルは外部に送信されません。
+          </p>
+        </div>
+
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.xlsb,.ods" />
+          <svg class="dropzone-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M24 31V11m0 0-8 8m8-8 8 8" />
+            <path d="M10 29v6a4 4 0 0 0 4 4h20a4 4 0 0 0 4-4v-6" />
+          </svg>
+          <span class="dropzone-title">ファイルをドロップ、またはクリックして選択</span>
+          <span class="dropzone-hint">.csv / .xlsx / .xls（Shift_JIS・UTF-8 の CSV に対応）</span>
+        </label>
+        <div class="landing-actions">
+          <button type="button" class="btn btn-ghost" id="sample-btn">架空のサンプルデータで試す</button>
+        </div>
+        <p class="error" id="load-error" role="alert" hidden></p>
+
+        <ol class="steps" aria-label="Power BI からのエクスポート手順">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <p class="step-title">ビジュアルの「…」を開く</p>
+              <p class="step-text">Power BI Desktop / サービスで、出力したい表やグラフの右上「その他のオプション」を選びます。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <p class="step-title">「データのエクスポート」</p>
+              <p class="step-text">.xlsx（最大15万行）か .csv（最大3万行）を選んで保存します。上限はビジュアルや管理者設定で小さくなる場合があります。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <p class="step-title">このページで開く</p>
+              <p class="step-text">列の型（数値・日付・カテゴリ）を自動判定し、集計しやすい形でグラフ化します。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 読み込み後 -->
+      <section class="workspace" id="workspace" hidden>
+        <div class="filebar">
+          <div class="file-meta">
+            <p class="file-name" id="file-name"></p>
+            <p class="file-sub" id="file-sub"></p>
+          </div>
+          <div class="file-actions">
+            <label class="field field-inline" id="sheet-field" hidden>
+              <span>シート</span>
+              <select id="sheet-select"></select>
+            </label>
+            <label class="btn btn-ghost" for="file-input-2">別のファイルを開く</label>
+            <input type="file" id="file-input-2" class="visually-hidden" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.xlsb,.ods" />
+          </div>
+        </div>
+
+        <div class="layout">
+          <aside class="filters" aria-label="フィルター">
+            <div class="panel-head">
+              <h2>フィルター</h2>
+              <button type="button" class="link-btn" id="clear-filters" hidden>すべて解除</button>
+            </div>
+            <ul class="chips" id="filter-chips"></ul>
+            <label class="field">
+              <span>列を選んで追加</span>
+              <select id="filter-column"></select>
+            </label>
+            <div class="filter-editor" id="filter-editor" hidden></div>
+          </aside>
+
+          <div class="content">
+            <div class="kpis" id="kpis"></div>
+
+            <nav class="tabs" role="tablist" aria-label="分析ビュー" id="tabs">
+              <button role="tab" type="button" data-tab="overview" aria-selected="true">概要</button>
+              <button role="tab" type="button" data-tab="group" aria-selected="false">集計</button>
+              <button role="tab" type="button" data-tab="trend" aria-selected="false">時系列</button>
+              <button role="tab" type="button" data-tab="dist" aria-selected="false">分布</button>
+              <button role="tab" type="button" data-tab="corr" aria-selected="false">相関</button>
+              <button role="tab" type="button" data-tab="pivot" aria-selected="false">クロス集計</button>
+              <button role="tab" type="button" data-tab="data" aria-selected="false">データ</button>
+            </nav>
+            <div class="tab-panel" id="panel" role="tabpanel" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="busy" id="busy" hidden>
+      <div class="busy-card" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="busy-text">処理中…</span>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>
+        ファイルはブラウザ内だけで処理されます。初回はライブラリ（Pyodide・pandas・ECharts）を CDN から取得するため、インターネット接続が必要です。
+      </p>
+    </footer>
+    <script>
+// 自動生成ファイル。編集しない。元: analysis.py / 再生成: npm run build:powerbi-viewer
+self.POWERBI_VIEWER_PY = "\"\"\"Power BI データビューアの解析エンジン。\n\nブラウザ内の Pyodide で実行する。JavaScript からは `api(method, args_json)` だけを呼び、\n戻り値はすべて JSON 文字列にする（Python オブジェクトを JS 側に持ち出さない）。\nローカルの CPython + pandas でも同じように動くので、テストは tests/test_analysis.py で行う。\n\"\"\"\n\nfrom __future__ import annotations\n\nimport io\nimport json\nimport math\nimport re\nimport unicodedata\nfrom datetime import date, datetime\nfrom typing import Any\n\nimport numpy as np\nimport pandas as pd\n\n# 型推定で「この列は数値（日付）」とみなす、変換に成功した値の割合\nPARSE_RATIO = 0.95\n# カテゴリ列とみなす一意値の上限\nCATEGORY_MAX_UNIQUE = 200\n# 数値列でも、一意値がこの数以下なら集計の軸に使える（例: 年、月番号）\nNUMERIC_DIMENSION_MAX_UNIQUE = 30\nOTHER_LABEL = \"その他\"\nBLANK_LABEL = \"(空白)\"\nCOUNT_KEY = \"__count__\"\nAGGS = {\"sum\", \"mean\", \"median\", \"min\", \"max\", \"count\", \"nunique\"}\nFREQS = {\"D\": \"日\", \"W\": \"週\", \"M\": \"月\", \"Q\": \"四半期\", \"Y\": \"年\"}\n\n# Power BI の Excel エクスポートは 1 行目に「Applied filters: …」、上限を超えると末尾に\n# 「Exported data exceeded the allowed volume. …」を書き込む（Microsoft Learn「Export data from a Power BI visualization」）\nNOTE_ROW = re.compile(r\"applied filters|適用され|フィルター|exceeded|omitted|超え|省略\", re.I)\nTRUNCATED = re.compile(r\"exceeded|omitted|超え|省略\", re.I)\nCURRENCY = re.compile(r\"[,\\s¥￥$€£円]\")\nJP_DATE = re.compile(r\"(\\d{1,4})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})?\\s*日?\")\n\n\nclass UserError(Exception):\n    \"\"\"利用者に見せてよい、原因と直し方を含むエラー。\"\"\"\n\n\n# --------------------------------------------------------------------------- 読み込み\n\n\ndef decode_text(data: bytes) -> tuple[str, str]:\n    \"\"\"CSV のバイト列を文字列にする。Power BI は BOM 付き UTF-8、手作業の CSV は Shift_JIS が多い。\"\"\"\n    if data.startswith(b\"\\xff\\xfe\") or data.startswith(b\"\\xfe\\xff\"):\n        return data.decode(\"utf-16\"), \"UTF-16\"\n    for encoding, label in ((\"utf-8-sig\", \"UTF-8\"), (\"cp932\", \"Shift_JIS (CP932)\")):\n        try:\n            return data.decode(encoding), label\n        except UnicodeDecodeError:\n            continue\n    return data.decode(\"utf-8\", errors=\"replace\"), \"UTF-8（一部の文字を置換）\"\n\n\ndef sniff_delimiter(text: str) -> str:\n    head = \"\\n\".join(text.splitlines()[:20])\n    counts = {d: head.count(d) for d in (\",\", \"\\t\", \";\", \"|\")}\n    best = max(counts, key=lambda d: counts[d])\n    return best if counts[best] > 0 else \",\"\n\n\ndef read_table(data: bytes, filename: str, sheet: str | None = None) -> tuple[pd.DataFrame, dict]:\n    name = filename.lower()\n    info: dict[str, Any] = {\"sheets\": [], \"sheet\": None, \"encoding\": None, \"delimiter\": None}\n    if name.endswith((\".xlsx\", \".xlsm\", \".xls\", \".xlsb\", \".ods\")):\n        try:\n            book = pd.ExcelFile(io.BytesIO(data), engine=\"calamine\")\n        except Exception as exc:  # noqa: BLE001 - 壊れたファイルの種類は多い\n            raise UserError(\n                f\"Excel ファイルを開けませんでした（{type(exc).__name__}）。\"\n                \"直し方: Power BI から .xlsx で再エクスポートするか、Excel で開いて保存し直してください。\"\n            ) from exc\n        sheets = [str(s) for s in book.sheet_names]\n        target = sheet if sheet in sheets else pick_sheet(book, sheets)\n        df = book.parse(target, header=None)\n        info.update(sheets=sheets, sheet=target)\n    elif name.endswith((\".csv\", \".tsv\", \".txt\")):\n        text, encoding = decode_text(data)\n        delimiter = \"\\t\" if name.endswith(\".tsv\") else sniff_delimiter(text)\n        try:\n            df = pd.read_csv(\n                io.StringIO(text),\n                sep=delimiter,\n                header=None,\n                dtype=str,\n                keep_default_na=False,\n                skip_blank_lines=True,\n                on_bad_lines=\"warn\",\n            )\n        except Exception as exc:  # noqa: BLE001\n            raise UserError(\n                f\"CSV を読み取れませんでした（{exc}）。直し方: 区切り文字がカンマかタブか確認してください。\"\n            ) from exc\n        info.update(encoding=encoding, delimiter={\",\": \"カンマ\", \"\\t\": \"タブ\", \";\": \"セミコロン\", \"|\": \"パイプ\"}[delimiter])\n    else:\n        raise UserError(\"対応していない形式です。直し方: .csv / .xlsx / .xls ファイルを選んでください。\")\n    df, notes = clean_frame(df)\n    info[\"notes\"] = notes\n    info[\"truncated\"] = any(TRUNCATED.search(n) for n in notes)\n    return df, info\n\n\ndef pick_sheet(book: pd.ExcelFile, sheets: list[str]) -> str:\n    \"\"\"データが最も多いシートを選ぶ。Power BI のエクスポートは通常 1 シート。\"\"\"\n    best, best_size = sheets[0], -1\n    for s in sheets[:20]:\n        size = book.parse(s, header=None, nrows=2000).count().sum()\n        if size > best_size:\n            best, best_size = s, size\n    return best\n\n\ndef clean_frame(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:\n    \"\"\"見出し行の前後にある注記行（値が1つだけの行）を取り除き、見出し行から列名を作る。\"\"\"\n    raw = raw.replace(r\"^\\s*$\", np.nan, regex=True)\n    raw = raw.dropna(axis=0, how=\"all\").dropna(axis=1, how=\"all\")\n    notes: list[str] = []\n    if raw.empty:\n        raise UserError(\"データ行が見つかりませんでした。直し方: 1行目が列名、2行目以降がデータの表を選んでください。\")\n    wide = raw.shape[1] > 1\n    start = 0\n    while wide and start < len(raw) - 1 and raw.iloc[start].notna().sum() <= 1:\n        notes.append(str(raw.iloc[start].dropna().iloc[0]).strip())\n        start += 1\n    header = raw.iloc[start]\n    body = raw.iloc[start + 1 :]\n    while wide and len(body) and body.iloc[-1].notna().sum() == 1:\n        value = body.iloc[-1].dropna().iloc[0]\n        if not (isinstance(value, str) and NOTE_ROW.search(value)):\n            break\n        notes.insert(len(notes), value.strip())\n        body = body.iloc[:-1]\n    df = body.copy()\n    df.columns = unique_names([clean_header(c, i) for i, c in enumerate(header)])\n    df = df.infer_objects()\n    if df.empty:\n        raise UserError(\"見出し行の下にデータがありません。直し方: エクスポートしたファイルにデータ行があるか確認してください。\")\n    return df.reset_index(drop=True), notes\n\n\ndef clean_header(value: Any, index: int) -> str:\n    if isinstance(value, float) and not math.isnan(value) and value.is_integer():\n        value = int(value)\n    text = \"\" if value is None or (isinstance(value, float) and math.isnan(value)) else str(value).strip()\n    if not text or text.startswith(\"Unnamed:\"):\n        return f\"列{index + 1}\"\n    return text\n\n\ndef unique_names(names: list[str]) -> list[str]:\n    seen: dict[str, int] = {}\n    out = []\n    for n in names:\n        if n in seen:\n            seen[n] += 1\n            out.append(f\"{n} ({seen[n]})\")\n        else:\n            seen[n] = 1\n            out.append(n)\n    return out\n\n\n# --------------------------------------------------------------------------- 型推定\n\n\ndef to_number(series: pd.Series) -> pd.Series:\n    if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):\n        return pd.to_numeric(series, errors=\"coerce\")\n    text = series.astype(\"string\").map(lambda v: unicodedata.normalize(\"NFKC\", v) if isinstance(v, str) else v)\n    text = text.str.replace(CURRENCY, \"\", regex=True).str.replace(\"−\", \"-\", regex=False)\n    negative = text.str.match(r\"^\\(.*\\)$\", na=False)\n    text = text.str.strip(\"()\")\n    percent = text.str.endswith(\"%\", na=False)\n    num = pd.to_numeric(text.str.rstrip(\"%\"), errors=\"coerce\")\n    num = num.where(~percent, num / 100)\n    return num.where(~negative, -num)\n\n\ndef to_datetime(series: pd.Series) -> pd.Series:\n    if pd.api.types.is_datetime64_any_dtype(series):\n        return series\n    text = series.astype(\"string\").str.strip()\n    text = text.str.replace(JP_DATE, lambda m: f\"{m[1]}-{m[2]}-{m[3] or 1}\", regex=True)\n    # 区切りのない数値（例: 2024, 12345）を日付と誤認しない\n    if not text.str.contains(r\"[-/.:T]\", na=False).any():\n        return pd.Series(pd.NaT, index=series.index)\n    return pd.to_datetime(text, errors=\"coerce\", format=\"mixed\")\n\n\ndef infer_kind(series: pd.Series) -> tuple[str, pd.Series]:\n    present = series.dropna()\n    if present.empty:\n        return \"text\", series\n    if pd.api.types.is_bool_dtype(series):\n        return \"category\", series.map({True: \"TRUE\", False: \"FALSE\"})\n    if pd.api.types.is_datetime64_any_dtype(series):\n        return \"datetime\", series\n    num = to_number(series)\n    if num.notna().sum() >= PARSE_RATIO * len(present):\n        return \"number\", num\n    if present.map(lambda v: isinstance(v, (datetime, date, pd.Timestamp))).all():\n        return \"datetime\", pd.to_datetime(series, errors=\"coerce\")\n    dt = to_datetime(series)\n    if dt.notna().sum() >= PARSE_RATIO * len(present):\n        return \"datetime\", dt\n    text = series.map(lambda v: v if v is None or (isinstance(v, float) and math.isnan(v)) else str(v).strip())\n    unique = text.nunique(dropna=True)\n    if unique <= CATEGORY_MAX_UNIQUE or unique <= 0.5 * len(present):\n        return \"category\", text\n    return \"text\", text\n\n\n# --------------------------------------------------------------------------- セッション\n\n\nclass Dataset:\n    def __init__(self, df: pd.DataFrame, name: str, info: dict):\n        self.name = name\n        self.info = info\n        self.kinds: dict[str, str] = {}\n        cols = {}\n        for col in df.columns:\n            kind, values = infer_kind(df[col])\n            self.kinds[col] = kind\n            cols[col] = values\n        self.df = pd.DataFrame(cols)\n        self.filters: dict[str, dict] = {}\n\n    # ---- 列の分類\n    def columns(self, *kinds: str) -> list[str]:\n        return [c for c, k in self.kinds.items() if k in kinds]\n\n    def dimensions(self) -> list[str]:\n        dims = self.columns(\"category\", \"text\")\n        dims += [c for c in self.columns(\"number\") if self.df[c].nunique() <= NUMERIC_DIMENSION_MAX_UNIQUE]\n        return dims\n\n    def require(self, col: str | None, *kinds: str) -> str:\n        if col not in self.kinds:\n            raise UserError(f\"列「{col}」が見つかりません。直し方: 一覧から列を選び直してください。\")\n        if kinds and self.kinds[col] not in kinds and not (col in self.dimensions() and \"category\" in kinds):\n            raise UserError(f\"列「{col}」はこの集計に使えない型（{self.kinds[col]}）です。\")\n        return col\n\n    # ---- フィルター\n    def view(self) -> pd.DataFrame:\n        df = self.df\n        mask = pd.Series(True, index=df.index)\n        for col, f in self.filters.items():\n            s = df[col]\n            if f[\"type\"] == \"in\":\n                labels = label_series(s)\n                mask &= labels.isin(set(f[\"values\"]))\n            elif f[\"type\"] == \"range\":\n                lo, hi = f.get(\"min\"), f.get(\"max\")\n                if self.kinds[col] == \"datetime\":\n                    lo = pd.Timestamp(lo) if lo else None\n                    hi = pd.Timestamp(hi) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1) if hi else None\n                if lo is not None:\n                    mask &= s >= lo\n                if hi is not None:\n                    mask &= s <= hi\n        return df[mask]\n\n    def set_filters(self, filters: dict) -> None:\n        clean = {}\n        for col, f in filters.items():\n            self.require(col)\n            if f.get(\"type\") == \"in\" and isinstance(f.get(\"values\"), list):\n                clean[col] = {\"type\": \"in\", \"values\": [str(v) for v in f[\"values\"]]}\n            elif f.get(\"type\") == \"range\":\n                lo, hi = f.get(\"min\"), f.get(\"max\")\n                if self.kinds[col] == \"number\":\n                    lo = float(lo) if lo not in (None, \"\") else None\n                    hi = float(hi) if hi not in (None, \"\") else None\n                if lo is not None or hi is not None:\n                    clean[col] = {\"type\": \"range\", \"min\": lo, \"max\": hi}\n        self.filters = clean\n\n\ndef label_series(s: pd.Series) -> pd.Series:\n    \"\"\"集計の軸に使う表示ラベル。欠損は「(空白)」、整数値は小数点なしにする。\"\"\"\n\n    def fmt(v: Any) -> str:\n        if v is None or (isinstance(v, float) and math.isnan(v)) or v is pd.NA or v is pd.NaT:\n            return BLANK_LABEL\n        if isinstance(v, (float, np.floating)) and float(v).is_integer():\n            return str(int(v))\n        if isinstance(v, pd.Timestamp):\n            return v.strftime(\"%Y-%m-%d\")\n        return str(v)\n\n    return s.map(fmt).astype(object)\n\n\ndef aggregate_series(values: pd.Series | None, groups: list, agg: str, index: pd.Index) -> pd.Series:\n    if agg not in AGGS:\n        raise UserError(f\"集計方法「{agg}」には対応していません。\")\n    if values is None:  # 件数\n        return pd.Series(1, index=index).groupby(groups, sort=False).sum()\n    grouped = values.groupby(groups, sort=False)\n    return getattr(grouped, agg)()\n\n\n_dataset: Dataset | None = None\n\n\ndef current() -> Dataset:\n    if _dataset is None:\n        raise UserError(\"データがまだ読み込まれていません。直し方: ファイルを選択してください。\")\n    return _dataset\n\n\n# --------------------------------------------------------------------------- API\n\n\ndef load(data: bytes, filename: str, sheet: str | None = None) -> dict:\n    global _dataset\n    df, info = read_table(data, filename, sheet)\n    _dataset = Dataset(df, filename, info)\n    return summary()\n\n\ndef load_sample(rows: int = 1460) -> dict:\n    global _dataset\n    _dataset = Dataset(sample_frame(rows), \"サンプル売上データ（架空）.csv\", {\"sheets\": [], \"sheet\": None, \"encoding\": \"生成データ\", \"delimiter\": None, \"notes\": [], \"truncated\": False})\n    return summary()\n\n\ndef sample_frame(rows: int) -> pd.DataFrame:\n    \"\"\"デモ用の架空データ。乱数の種を固定し、毎回同じ内容にする。\"\"\"\n    rng = np.random.default_rng(20261029)\n    dates = pd.Timestamp(\"2024-10-01\") + pd.to_timedelta(rng.integers(0, 730, rows), unit=\"D\")\n    regions = rng.choice([\"関東\", \"関西\", \"中部\", \"九州\", \"北海道\", \"東北\"], rows, p=[0.34, 0.22, 0.16, 0.12, 0.08, 0.08])\n    categories = rng.choice([\"ノートPC\", \"モニター\", \"周辺機器\", \"ソフトウェア\", \"保守サービス\"], rows)\n    base = {\"ノートPC\": 180000, \"モニター\": 42000, \"周辺機器\": 9000, \"ソフトウェア\": 26000, \"保守サービス\": 60000}\n    qty = rng.integers(1, 12, rows)\n    season = 1 + 0.18 * np.sin((dates.month.to_numpy() - 3) / 12 * 2 * np.pi)\n    trend = 1 + (dates - dates.min()).days.to_numpy() / 730 * 0.25\n    unit = np.array([base[c] for c in categories]) * rng.normal(1, 0.08, rows)\n    sales = (unit * qty * season * trend).round(-1)\n    margin = np.clip(rng.normal(0.22, 0.07, rows), 0.02, 0.5)\n    df = pd.DataFrame(\n        {\n            \"注文日\": dates.strftime(\"%Y-%m-%d\"),\n            \"地域\": regions,\n            \"製品カテゴリ\": categories,\n            \"担当者\": rng.choice([f\"担当{c}\" for c in \"ABCDEFGH\"], rows),\n            \"数量\": qty,\n            \"売上\": sales,\n            \"利益\": (sales * margin).round(-1),\n        }\n    ).sort_values(\"注文日\", kind=\"stable\")\n    return df.reset_index(drop=True)\n\n\ndef summary() -> dict:\n    ds = current()\n    view = ds.view()\n    numbers = ds.columns(\"number\")\n    measures = [c for c in numbers if c not in ds.dimensions() or ds.df[c].nunique() > 12]\n    kpis = [{\"label\": \"行数\", \"value\": int(len(view)), \"total\": int(len(ds.df)), \"format\": \"int\"}]\n    for col in measures[:3]:\n        kpis.append({\"label\": f\"{col} 合計\", \"value\": num(view[col].sum()), \"format\": \"number\", \"column\": col})\n    return {\n        \"name\": ds.name,\n        \"rows\": int(len(ds.df)),\n        \"filtered_rows\": int(len(view)),\n        \"columns\": [{\"name\": c, \"kind\": k} for c, k in ds.kinds.items()],\n        \"dimensions\": ds.dimensions(),\n        \"measures\": numbers,\n        \"datetimes\": ds.columns(\"datetime\"),\n        \"info\": ds.info,\n        \"filters\": ds.filters,\n        \"kpis\": kpis,\n    }\n\n\ndef profile() -> dict:\n    ds = current()\n    view = ds.view()\n    out = []\n    for col, kind in ds.kinds.items():\n        s = view[col]\n        item: dict[str, Any] = {\n            \"name\": col,\n            \"kind\": kind,\n            \"count\": int(s.notna().sum()),\n            \"missing\": int(s.isna().sum()),\n            \"unique\": int(s.nunique(dropna=True)),\n        }\n        if kind == \"number\":\n            item.update(min=num(s.min()), max=num(s.max()), mean=num(s.mean()), median=num(s.median()), sum=num(s.sum()))\n        elif kind == \"datetime\":\n            item.update(min=iso(s.min()), max=iso(s.max()))\n        else:\n            top = label_series(s.dropna()).value_counts().head(3)\n            item[\"top\"] = [{\"value\": str(k), \"count\": int(v)} for k, v in top.items()]\n        out.append(item)\n    return {\"columns\": out, \"rows\": int(len(view))}\n\n\ndef filter_options(column: str, search: str = \"\", limit: int = 300) -> dict:\n    ds = current()\n    col = ds.require(column)\n    kind = ds.kinds[col]\n    s = ds.df[col]\n    if kind == \"number\" and col not in ds.dimensions():\n        return {\"kind\": \"range\", \"min\": num(s.min()), \"max\": num(s.max())}\n    if kind == \"datetime\":\n        return {\"kind\": \"date\", \"min\": iso(s.min(), date_only=True), \"max\": iso(s.max(), date_only=True)}\n    counts = label_series(s).value_counts()\n    if search:\n        counts = counts[counts.index.str.contains(re.escape(search), case=False)]\n    return {\n        \"kind\": \"in\",\n        \"values\": [{\"value\": str(k), \"count\": int(v)} for k, v in counts.head(limit).items()],\n        \"total\": int(len(counts)),\n    }\n\n\ndef set_filters(filters: dict) -> dict:\n    current().set_filters(filters)\n    return summary()\n\n\ndef group(dimension: str, measure: str | None, agg: str = \"sum\", top: int = 15, fold_other: bool = True) -> dict:\n    ds = current()\n    view = ds.view()\n    dim = ds.require(dimension, \"category\")\n    values = None if measure in (None, \"\", COUNT_KEY) else view[ds.require(measure, \"number\")]\n    if values is None:\n        agg = \"count\"\n    labels = label_series(view[dim])\n    result = aggregate_series(values, [labels], agg if values is not None else \"sum\", view.index)\n    result = result.dropna().sort_values(ascending=False, kind=\"stable\")\n    total = num(result.sum()) if agg in (\"sum\", \"count\") else None\n    rows = [{\"label\": str(k), \"value\": num(v)} for k, v in result.head(top).items()]\n    rest = result.iloc[top:]\n    other = None\n    if fold_other and len(rest) and agg in (\"sum\", \"count\"):\n        other = {\"label\": f\"{OTHER_LABEL}（{len(rest)}件）\", \"value\": num(rest.sum())}\n    return {\"rows\": rows, \"other\": other, \"groups\": int(len(result)), \"total\": total, \"agg\": agg}\n\n\ndef timeseries(\n    date_column: str, measure: str | None, agg: str = \"sum\", freq: str = \"M\", split: str | None = None, max_series: int = 5\n) -> dict:\n    ds = current()\n    view = ds.view()\n    dcol = ds.require(date_column, \"datetime\")\n    if freq not in FREQS:\n        raise UserError(f\"集計単位「{freq}」には対応していません。\")\n    values = None if measure in (None, \"\", COUNT_KEY) else view[ds.require(measure, \"number\")]\n    if values is None:\n        agg = \"count\"\n    dates = view[dcol]\n    valid = dates.notna()\n    periods = dates[valid].dt.to_period(freq)\n    view_valid = view[valid]\n    vals = values[valid] if values is not None else None\n    if periods.empty:\n        return {\"periods\": [], \"series\": [], \"freq\": freq}\n    full = pd.period_range(periods.min(), periods.max(), freq=freq)\n    groups_key = [periods]\n    names = [None]\n    if split:\n        scol = ds.require(split, \"category\")\n        labels = label_series(view_valid[scol])\n        ranking = aggregate_series(vals, [labels], \"sum\" if agg in (\"sum\", \"count\") else agg, view_valid.index)\n        keep = list(ranking.sort_values(ascending=False).index[:max_series])\n        labels = labels.where(labels.isin(keep), OTHER_LABEL)\n        names = keep + ([OTHER_LABEL] if (labels == OTHER_LABEL).any() and OTHER_LABEL not in keep else [])\n        groups_key = [periods, labels]\n    result = aggregate_series(vals, groups_key, agg if vals is not None else \"sum\", view_valid.index)\n    fill = 0 if agg in (\"sum\", \"count\") else None\n    series = []\n    for name in names:\n        part = result if name is None else result.xs(name, level=1) if name in result.index.get_level_values(1) else pd.Series(dtype=float)\n        part = part.reindex(full)\n        series.append({\"name\": name or (measure if values is not None else \"件数\"), \"values\": [num(v) if not pd.isna(v) else fill for v in part]})\n    return {\"periods\": [period_label(p, freq) for p in full], \"series\": series, \"freq\": freq, \"agg\": agg}\n\n\ndef period_label(p: pd.Period, freq: str) -> str:\n    if freq == \"Y\":\n        return f\"{p.year}\"\n    if freq == \"Q\":\n        return f\"{p.year} Q{p.quarter}\"\n    if freq == \"M\":\n        return p.strftime(\"%Y-%m\")\n    return p.start_time.strftime(\"%Y-%m-%d\")\n\n\ndef histogram(column: str, bins: int = 0) -> dict:\n    ds = current()\n    s = ds.view()[ds.require(column, \"number\")].dropna()\n    if s.empty:\n        return {\"bins\": [], \"stats\": {}}\n    arr = s.to_numpy(dtype=float)\n    if bins <= 0:\n        edges = np.histogram_bin_edges(arr, bins=\"auto\")\n        if len(edges) > 41:\n            edges = np.histogram_bin_edges(arr, bins=40)\n    else:\n        edges = np.histogram_bin_edges(arr, bins=min(int(bins), 200))\n    counts, edges = np.histogram(arr, bins=edges)\n    q = np.quantile(arr, [0.25, 0.5, 0.75])\n    return {\n        \"bins\": [{\"from\": num(edges[i]), \"to\": num(edges[i + 1]), \"count\": int(c)} for i, c in enumerate(counts)],\n        \"stats\": {\n            \"count\": int(arr.size),\n            \"mean\": num(arr.mean()),\n            \"std\": num(arr.std(ddof=1)) if arr.size > 1 else None,\n            \"min\": num(arr.min()),\n            \"q1\": num(q[0]),\n            \"median\": num(q[1]),\n            \"q3\": num(q[2]),\n            \"max\": num(arr.max()),\n        },\n    }\n\n\ndef correlation(limit: int = 15) -> dict:\n    ds = current()\n    view = ds.view()\n    cols = [c for c in ds.columns(\"number\") if view[c].nunique() > 1][:limit]\n    if len(cols) < 2:\n        return {\"columns\": cols, \"matrix\": []}\n    corr = view[cols].corr(method=\"pearson\", min_periods=3)\n    return {\"columns\": cols, \"matrix\": [[num(v) for v in row] for row in corr.to_numpy()]}\n\n\ndef pivot(row: str, column: str, measure: str | None, agg: str = \"sum\", max_rows: int = 30, max_cols: int = 12) -> dict:\n    ds = current()\n    view = ds.view()\n    r = ds.require(row, \"category\")\n    c = ds.require(column, \"category\")\n    values = None if measure in (None, \"\", COUNT_KEY) else view[ds.require(measure, \"number\")]\n    if values is None:\n        agg = \"count\"\n    rl, cl = label_series(view[r]), label_series(view[c])\n    top_r = rl.value_counts().index[:max_rows]\n    top_c = cl.value_counts().index[:max_cols]\n    rl = rl.where(rl.isin(top_r), OTHER_LABEL)\n    cl = cl.where(cl.isin(top_c), OTHER_LABEL)\n    result = aggregate_series(values, [rl, cl], agg if values is not None else \"sum\", view.index)\n    table = result.unstack(fill_value=np.nan)\n    order_r = [x for x in list(top_r) + [OTHER_LABEL] if x in table.index]\n    order_c = [x for x in list(top_c) + [OTHER_LABEL] if x in table.columns]\n    table = table.reindex(index=order_r, columns=order_c)\n    return {\n        \"rows\": [str(x) for x in table.index],\n        \"columns\": [str(x) for x in table.columns],\n        \"matrix\": [[num(v) for v in row] for row in table.to_numpy()],\n        \"agg\": agg,\n    }\n\n\ndef preview(page: int = 0, size: int = 50, search: str = \"\", sort: str | None = None, desc: bool = False) -> dict:\n    ds = current()\n    view = ds.view()\n    if search:\n        needle = search.lower()\n        hit = pd.Series(False, index=view.index)\n        for col in view.columns:\n            hit |= label_series(view[col]).str.lower().str.contains(needle, regex=False)\n        view = view[hit]\n    if sort in view.columns:\n        view = view.sort_values(sort, ascending=not desc, na_position=\"last\", kind=\"stable\")\n    size = max(1, min(int(size), 500))\n    pages = max(1, math.ceil(len(view) / size))\n    page = max(0, min(int(page), pages - 1))\n    chunk = view.iloc[page * size : (page + 1) * size]\n    return {\n        \"columns\": [{\"name\": c, \"kind\": ds.kinds[c]} for c in view.columns],\n        \"rows\": [[cell(v, ds.kinds[c]) for c, v in zip(view.columns, row)] for row in chunk.itertuples(index=False)],\n        \"page\": page,\n        \"pages\": pages,\n        \"matched\": int(len(view)),\n    }\n\n\ndef export_rows() -> dict:\n    \"\"\"フィルター後の全行。CSV への書き出しは JS 側で行う。\"\"\"\n    ds = current()\n    view = ds.view()\n    return {\n        \"columns\": list(view.columns),\n        \"rows\": [[cell(v, ds.kinds[c]) for c, v in zip(view.columns, row)] for row in view.itertuples(index=False)],\n    }\n\n\ndef insights() -> dict:\n    \"\"\"集計結果から機械的に読み取れる事実だけを文章にする（推測は書かない）。\"\"\"\n    ds = current()\n    view = ds.view()\n    notes: list[dict] = []\n    measures = ds.columns(\"number\")\n    measure = next((m for m in measures if m not in ds.dimensions()), measures[0] if measures else None)\n    dims = [d for d in ds.dimensions() if d not in measures and 1 < view[d].nunique() <= CATEGORY_MAX_UNIQUE]\n    if measure and dims:\n        g = group(dims[0], measure, \"sum\", top=1)\n        if g[\"rows\"] and g[\"total\"]:\n            top = g[\"rows\"][0]\n            share = top[\"value\"] / g[\"total\"] * 100 if g[\"total\"] else 0\n            notes.append({\"kind\": \"share\", \"text\": f\"「{dims[0]}」別の{measure}合計は「{top['label']}」が最大で、全体の {share:.1f}% を占めます。\"})\n    dts = ds.columns(\"datetime\")\n    if dts:\n        ts = timeseries(dts[0], measure, \"sum\" if measure else \"count\", \"M\")\n        vals = ts[\"series\"][0][\"values\"] if ts[\"series\"] else []\n        if len(vals) >= 2 and vals[-2]:\n            change = (vals[-1] - vals[-2]) / abs(vals[-2]) * 100\n            label = measure or \"件数\"\n            notes.append(\n                {\n                    \"kind\": \"trend\",\n                    \"text\": f\"直近の月（{ts['periods'][-1]}）の{label}は前月比 {change:+.1f}% です。\"\n                    + (\"月の途中までのデータの可能性があります。\" if change < -50 else \"\"),\n                }\n            )\n        if len(vals) >= 3:\n            peak = int(np.nanargmax(np.array(vals, dtype=float)))\n            notes.append({\"kind\": \"peak\", \"text\": f\"月別の{measure or '件数'}が最も大きいのは {ts['periods'][peak]} です。\"})\n    corr = correlation()\n    if corr[\"matrix\"]:\n        best = None\n        cols = corr[\"columns\"]\n        for i in range(len(cols)):\n            for j in range(i + 1, len(cols)):\n                v = corr[\"matrix\"][i][j]\n                if v is not None and (best is None or abs(v) > abs(best[2])):\n                    best = (cols[i], cols[j], v)\n        if best and abs(best[2]) >= 0.5:\n            sign = \"正\" if best[2] > 0 else \"負\"\n            notes.append({\"kind\": \"corr\", \"text\": f\"「{best[0]}」と「{best[1]}」に{sign}の相関があります（r = {best[2]:.2f}）。相関は因果を示しません。\"})\n    missing = [(c, int(view[c].isna().sum())) for c in view.columns]\n    missing = [(c, n) for c, n in missing if n]\n    if missing and len(view):\n        c, n = max(missing, key=lambda x: x[1])\n        notes.append({\"kind\": \"missing\", \"text\": f\"「{c}」に空白が {n:,} 件（{n / len(view) * 100:.1f}%）あります。集計では除外されます。\"})\n    return {\"items\": notes}\n\n\n# --------------------------------------------------------------------------- 変換\n\n\ndef num(v: Any) -> float | int | None:\n    if v is None or v is pd.NA:\n        return None\n    try:\n        f = float(v)\n    except (TypeError, ValueError):\n        return None\n    if math.isnan(f) or math.isinf(f):\n        return None\n    return int(f) if f.is_integer() and abs(f) < 2**53 else f\n\n\ndef iso(v: Any, date_only: bool = False) -> str | None:\n    if v is None or v is pd.NaT or (isinstance(v, float) and math.isnan(v)):\n        return None\n    ts = pd.Timestamp(v)\n    if date_only or (ts.hour == ts.minute == ts.second == 0):\n        return ts.strftime(\"%Y-%m-%d\")\n    return ts.strftime(\"%Y-%m-%d %H:%M\")\n\n\ndef cell(v: Any, kind: str) -> Any:\n    if kind == \"number\":\n        return num(v)\n    if kind == \"datetime\":\n        return iso(v)\n    if v is None or v is pd.NA or (isinstance(v, float) and math.isnan(v)):\n        return None\n    return str(v)\n\n\nMETHODS = {\n    \"summary\": summary,\n    \"profile\": profile,\n    \"filter_options\": filter_options,\n    \"set_filters\": set_filters,\n    \"group\": group,\n    \"timeseries\": timeseries,\n    \"histogram\": histogram,\n    \"correlation\": correlation,\n    \"pivot\": pivot,\n    \"preview\": preview,\n    \"export_rows\": export_rows,\n    \"insights\": insights,\n    \"load_sample\": load_sample,\n}\n\n\ndef api(method: str, args_json: str = \"{}\") -> str:\n    \"\"\"JS からの唯一の入口。結果は {\"ok\": true, \"data\": …} か {\"ok\": false, \"error\": …}。\"\"\"\n    try:\n        if method not in METHODS:\n            raise UserError(f\"未知の操作です: {method}\")\n        data = METHODS[method](**json.loads(args_json or \"{}\"))\n        return json.dumps({\"ok\": True, \"data\": data}, ensure_ascii=False, allow_nan=False)\n    except UserError as exc:\n        return json.dumps({\"ok\": False, \"error\": str(exc)}, ensure_ascii=False)\n    except Exception as exc:  # noqa: BLE001 - 想定外の失敗も画面に出す\n        return json.dumps({\"ok\": False, \"error\": f\"処理中にエラーが発生しました（{type(exc).__name__}: {exc}）\"}, ensure_ascii=False)\n\n\ndef api_load(data: bytes, filename: str, sheet: str | None = None) -> str:\n    \"\"\"ファイルのバイト列だけは JSON を通さずに受け取る。\"\"\"\n    try:\n        raw = data.to_bytes() if hasattr(data, \"to_bytes\") else bytes(data)  # Pyodide では JS の Uint8Array が届く\n        return json.dumps({\"ok\": True, \"data\": load(raw, filename, sheet)}, ensure_ascii=False, allow_nan=False)\n    except UserError as exc:\n        return json.dumps({\"ok\": False, \"error\": str(exc)}, ensure_ascii=False)\n    except Exception as exc:  # noqa: BLE001\n        return json.dumps({\"ok\": False, \"error\": f\"読み込み中にエラーが発生しました（{type(exc).__name__}: {exc}）\"}, ensure_ascii=False)\n";
+
+</script>
+    <script>
+/* Power BI データビューア — 画面とグラフ（JavaScript）
+ *
+ * 解析は Web Worker 上の Pyodide（Python + pandas）が担当し、この画面は結果の JSON を描くだけにする。
+ * ファイルの中身は Worker に渡すだけで、ネットワークには送らない。
+ * 読み込んだ値は信用しない: DOM には textContent で入れ、ECharts のツールチップに渡す文字列は esc() を通す。
+ */
+"use strict";
+
+const PYODIDE_VERSION = "314.0.7";
+const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+// pyodide.js の SHA-384。バージョンを上げるときは README の手順で再計算する
+const PYODIDE_INTEGRITY = "sha384-hYKrcQ7FiKU7f1c92md9N2eh7BoBVX4CPkNDfQyyVclsjZevvDOBUkajGcYk1EF8";
+const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const COUNT = "__count__";
+const AGG_LABELS = {
+  sum: "合計",
+  mean: "平均",
+  median: "中央値",
+  min: "最小",
+  max: "最大",
+  count: "件数",
+  nunique: "個別件数",
+};
+const FREQ_LABELS = { D: "日", W: "週", M: "月", Q: "四半期", Y: "年" };
+const KIND_LABELS = { number: "数値", datetime: "日付", category: "カテゴリ", text: "テキスト" };
+
+// ------------------------------------------------------------------ Python エンジン（Worker）
+
+/* Worker の中身。file:// で開いても動くよう、別ファイルにせず Blob から起動する。 */
+function workerMain() {
+  let api = null;
+  let apiLoad = null;
+  const send = (msg) => self.postMessage(msg);
+
+  self.onmessage = async (event) => {
+    const { id, type, payload } = event.data;
+    try {
+      let result;
+      if (type === "init") {
+        send({ type: "progress", text: "Python ランタイムを取得中…" });
+        // CDN の改ざんに備え、ハッシュが一致したスクリプトだけを実行する
+        const res = await fetch(payload.indexURL + "pyodide.js", { integrity: payload.integrity });
+        if (!res.ok) throw new Error(`pyodide.js を取得できません（HTTP ${res.status}）`);
+        const url = URL.createObjectURL(await res.blob());
+        importScripts(url);
+        URL.revokeObjectURL(url);
+        const pyodide = await self.loadPyodide({ indexURL: payload.indexURL });
+        send({ type: "progress", text: "pandas を読み込み中…" });
+        await pyodide.loadPackage(["numpy", "pandas", "python-calamine"]);
+        send({ type: "progress", text: "解析エンジンを初期化中…" });
+        const ns = pyodide.globals.get("dict")();
+        ns.set("__name__", "analysis");
+        pyodide.runPython(payload.source, { globals: ns });
+        api = ns.get("api");
+        apiLoad = ns.get("api_load");
+        result = pyodide.version;
+      } else if (type === "load") {
+        result = apiLoad(payload.bytes, payload.name, payload.sheet ?? null);
+      } else {
+        result = api(payload.method, JSON.stringify(payload.args || {}));
+      }
+      send({ id, ok: true, result });
+    } catch (err) {
+      send({ id, ok: false, error: String((err && err.message) || err) });
+    }
+  };
+}
+
+class UserFacingError extends Error {}
+
+const engine = (() => {
+  const pending = new Map();
+  let seq = 0;
+  let worker = null;
+  let ready = null;
+
+  function rpc(type, payload, transfer = []) {
+    return new Promise((resolve, reject) => {
+      const id = ++seq;
+      pending.set(id, { resolve, reject });
+      worker.postMessage({ id, type, payload }, transfer);
+    });
+  }
+
+  function start() {
+    if (ready) return ready;
+    const source = self.POWERBI_VIEWER_PY;
+    if (typeof source !== "string") {
+      ready = Promise.reject(new Error("analysis.py.js がありません。npm run build:powerbi-viewer を実行してください"));
+      return ready;
+    }
+    const blob = new Blob([`(${workerMain.toString()})();`], { type: "text/javascript" });
+    worker = new Worker(URL.createObjectURL(blob));
+    worker.onmessage = ({ data }) => {
+      if (data.type === "progress") return setEngine("loading", data.text);
+      const p = pending.get(data.id);
+      if (!p) return;
+      pending.delete(data.id);
+      data.ok ? p.resolve(data.result) : p.reject(new Error(data.error));
+    };
+    worker.onerror = (e) => setEngine("error", `Python を起動できません: ${e.message || "不明なエラー"}`);
+    ready = rpc("init", { indexURL: PYODIDE_URL, integrity: PYODIDE_INTEGRITY, source }).then(
+      (version) => setEngine("ready", `Python 準備完了（Pyodide ${version}）`),
+      (err) => {
+        setEngine("error", "Python を読み込めませんでした");
+        throw new UserFacingError(
+          `解析エンジン（Pyodide）を読み込めませんでした: ${err.message}\n直し方: インターネット接続と、cdn.jsdelivr.net への通信が許可されているか確認してページを再読み込みしてください。`,
+        );
+      },
+    );
+    return ready;
+  }
+
+  function parse(raw) {
+    const res = JSON.parse(raw);
+    if (!res.ok) throw new UserFacingError(res.error);
+    return res.data;
+  }
+
+  return {
+    start,
+    async call(method, args = {}) {
+      await start();
+      return parse(await rpc("call", { method, args }));
+    },
+    async load(buffer, name, sheet) {
+      await start();
+      const bytes = new Uint8Array(buffer.slice(0)); // 元の ArrayBuffer はシート切替用に残す
+      return parse(await rpc("load", { bytes, name, sheet }, [bytes.buffer]));
+    },
+  };
+})();
+
+// ------------------------------------------------------------------ DOM ヘルパー
+
+const $ = (id) => document.getElementById(id);
+
+/** 要素を作る。文字列の子要素は必ずテキストノードになる（HTML として解釈しない）。 */
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k in el && typeof v !== "string") el[k] = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+const nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+const nfSmall = new Intl.NumberFormat("ja-JP", { maximumSignificantDigits: 4 });
+const nfCompact = new Intl.NumberFormat("ja-JP", { notation: "compact", maximumSignificantDigits: 3 });
+
+function fmt(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v !== "number") return String(v);
+  return Math.abs(v) < 1 && v !== 0 ? nfSmall.format(v) : nf.format(v);
+}
+
+function compact(v) {
+  if (v === null || v === undefined) return "—";
+  return Math.abs(v) < 10000 ? fmt(v) : nfCompact.format(v);
+}
+
+function option(value, label, selected) {
+  return h("option", { value, selected: value === selected }, label);
+}
+
+function selectField(label, options, value, onChange) {
+  const sel = h("select", { onchange: (e) => onChange(e.target.value) }, options.map(([v, l]) => option(v, l, value)));
+  return h("label", { class: "field" }, h("span", {}, label), sel);
+}
+
+function download(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function toCsv(header, rows) {
+  const cell = (v) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    // 先頭が = + - @ のセルは Excel で数式として実行されないよう ' を付ける
+    const safe = /^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s) ? `'${s}` : s;
+    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+  return "﻿" + [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+}
+
+function downloadCsv(name, header, rows) {
+  download(`${baseName()}_${name}.csv`, new Blob([toCsv(header, rows)], { type: "text/csv;charset=utf-8" }));
+}
+
+function baseName() {
+  return (state.meta?.name || "data").replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|]/g, "_");
+}
+
+// ------------------------------------------------------------------ 状態
+
+const state = {
+  file: null, // { name, buffer }
+  meta: null,
+  tab: "overview",
+  ctl: {},
+  views: {}, // カードごとの「グラフ / 表」
+  preview: { page: 0, search: "", sort: null, desc: false },
+  colorMap: new Map(), // 系列名 → 色の番号（フィルターで系列が減っても色を変えない）
+  charts: [],
+  renderToken: 0,
+};
+
+function setEngine(status, text) {
+  $("engine").dataset.state = status;
+  $("engine-text").textContent = text;
+  $("engine").title = text;
+}
+
+let busyTimer = null;
+let busyCount = 0;
+async function withBusy(text, fn) {
+  busyCount++;
+  clearTimeout(busyTimer);
+  busyTimer = setTimeout(() => {
+    $("busy-text").textContent = text;
+    $("busy").hidden = false;
+  }, 250);
+  try {
+    return await fn();
+  } finally {
+    if (--busyCount === 0) {
+      clearTimeout(busyTimer);
+      $("busy").hidden = true;
+    }
+  }
+}
+
+function showLoadError(err) {
+  const box = $("load-error");
+  box.textContent = err instanceof UserFacingError ? err.message : `読み込みに失敗しました: ${err.message || err}`;
+  box.hidden = false;
+  if (!$("workspace").hidden) {
+    $("panel").prepend(h("p", { class: "error", role: "alert" }, box.textContent));
+  }
+}
+
+// ------------------------------------------------------------------ 読み込み
+
+async function openFile(file) {
+  $("load-error").hidden = true;
+  if (!file) return;
+  if (file.size > MAX_FILE_BYTES) {
+    return showLoadError(new UserFacingError(`ファイルが大きすぎます（${Math.round(file.size / 1048576)}MB）。直し方: 200MB 以下に分割するか、Power BI 側で列や期間を絞ってエクスポートしてください。`));
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const meta = await withBusy("ファイルを解析中…", () => engine.load(buffer, file.name, null));
+    state.file = { name: file.name, buffer };
+    start(meta);
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+async function openSample() {
+  $("load-error").hidden = true;
+  try {
+    const meta = await withBusy("サンプルを生成中…", () => engine.call("load_sample"));
+    state.file = null;
+    start(meta);
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+async function changeSheet(sheet) {
+  if (!state.file) return;
+  try {
+    const meta = await withBusy("シートを読み込み中…", () => engine.load(state.file.buffer, state.file.name, sheet));
+    start(meta);
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+function start(meta) {
+  state.meta = meta;
+  state.ctl = defaultControls(meta);
+  state.views = {};
+  state.preview = { page: 0, search: "", sort: null, desc: false };
+  state.colorMap = new Map();
+  $("landing").hidden = true;
+  $("workspace").hidden = false;
+  $("file-name").textContent = meta.name;
+  renderFileInfo();
+  renderFilterColumns();
+  renderChips();
+  closeEditor();
+  renderKpis();
+  selectTab(state.tab);
+  window.scrollTo({ top: 0 });
+}
+
+function defaultControls(meta) {
+  const dims = meta.dimensions.filter((d) => !meta.measures.includes(d));
+  const allDims = dims.length ? dims : meta.dimensions;
+  const measures = meta.measures.filter((m) => !meta.dimensions.includes(m));
+  const measure = measures[0] || meta.measures[0] || COUNT;
+  return {
+    group: { dimension: allDims[0], measure, agg: measure === COUNT ? "count" : "sum", top: "15" },
+    trend: { date: meta.datetimes[0], measure, agg: measure === COUNT ? "count" : "sum", freq: "M", split: "" },
+    dist: { column: measure === COUNT ? meta.measures[0] : measure, bins: "0" },
+    pivot: { row: allDims[0], column: allDims[1] || allDims[0], measure, agg: measure === COUNT ? "count" : "sum" },
+  };
+}
+
+function renderFileInfo() {
+  const { meta } = state;
+  const info = meta.info || {};
+  const parts = [`${fmt(meta.rows)} 行 × ${meta.columns.length} 列`];
+  if (info.sheet) parts.push(`シート「${info.sheet}」`);
+  if (info.encoding) parts.push(info.encoding);
+  if (info.delimiter) parts.push(`${info.delimiter}区切り`);
+  $("file-sub").textContent = parts.join(" · ");
+
+  const sheetField = $("sheet-field");
+  const sheets = info.sheets || [];
+  sheetField.hidden = sheets.length < 2;
+  $("sheet-select").replaceChildren(...sheets.map((s) => option(s, s, info.sheet)));
+
+  document.querySelectorAll(".notice").forEach((n) => n.remove());
+  const notices = [];
+  if (info.truncated) {
+    notices.push(h("p", { class: "notice", role: "note" }, "このファイルは Power BI のエクスポート上限に達しており、一部の行が省略されています。全件が必要な場合は、フィルターで分割してエクスポートしてください。"));
+  }
+  for (const note of info.notes || []) {
+    if (/exceeded|omitted|超え|省略/i.test(note)) continue;
+    notices.push(h("p", { class: "notice notice-info", role: "note" }, `ファイル内の注記: ${note}`));
+  }
+  if (!state.file && !info.sheet) {
+    notices.push(h("p", { class: "notice notice-info", role: "note" }, "表示中のデータは操作確認用の架空データです。"));
+  }
+  $("workspace").querySelector(".filebar").after(...notices);
+}
+
+// ------------------------------------------------------------------ KPI
+
+function renderKpis() {
+  const { meta } = state;
+  const filtered = meta.filtered_rows !== meta.rows;
+  const tiles = meta.kpis.map((k) =>
+    h(
+      "div",
+      { class: "kpi" },
+      h("p", { class: "kpi-label", title: k.label }, k.label),
+      h("p", { class: "kpi-value" }, k.format === "int" ? fmt(k.value) : compact(k.value)),
+      h(
+        "p",
+        { class: "kpi-sub" },
+        k.format === "int" ? (filtered ? `全 ${fmt(k.total)} 行中（${((k.value / k.total) * 100 || 0).toFixed(1)}%）` : "全件") : filtered ? "フィルター適用後" : fmt(k.value),
+      ),
+    ),
+  );
+  $("kpis").replaceChildren(...tiles);
+}
+
+// ------------------------------------------------------------------ フィルター
+
+function columnKind(name) {
+  return state.meta.columns.find((c) => c.name === name)?.kind;
+}
+
+function renderFilterColumns() {
+  const sel = $("filter-column");
+  sel.replaceChildren(
+    option("", "＋ 列を選択…", ""),
+    ...state.meta.columns.map((c) => option(c.name, `${c.name}（${KIND_LABELS[c.kind]}）`, "")),
+  );
+}
+
+function filterText(col, f) {
+  if (f.type === "in") {
+    const head = f.values.slice(0, 2).join("、");
+    return f.values.length > 2 ? `${head} ほか${f.values.length - 2}件` : head || "（なし）";
+  }
+  const lo = f.min ?? "";
+  const hi = f.max ?? "";
+  const show = (v) => (typeof v === "number" ? fmt(v) : v);
+  return `${show(lo)} 〜 ${show(hi)}`;
+}
+
+function renderChips() {
+  const filters = state.meta.filters || {};
+  const items = Object.entries(filters).map(([col, f]) =>
+    h(
+      "li",
+      { class: "chip" },
+      h(
+        "span",
+        { class: "chip-text", title: `${col}: ${filterText(col, f)}`, role: "button", tabindex: "0", onclick: () => openEditor(col), onkeydown: (e) => e.key === "Enter" && openEditor(col) },
+        h("b", {}, col),
+        `: ${filterText(col, f)}`,
+      ),
+      h("button", { type: "button", "aria-label": `${col} のフィルターを解除`, onclick: () => applyFilter(col, null) }, "×"),
+    ),
+  );
+  $("filter-chips").replaceChildren(...items);
+  $("clear-filters").hidden = items.length === 0;
+}
+
+function closeEditor() {
+  $("filter-editor").hidden = true;
+  $("filter-editor").replaceChildren();
+  $("filter-column").value = "";
+}
+
+async function openEditor(col) {
+  const box = $("filter-editor");
+  $("filter-column").value = col;
+  let opts;
+  try {
+    opts = await engine.call("filter_options", { column: col });
+  } catch (err) {
+    return showLoadError(err);
+  }
+  const current = (state.meta.filters || {})[col];
+  const title = h("p", { class: "card-title" }, col);
+  const actions = (getValue) =>
+    h(
+      "div",
+      { class: "editor-actions" },
+      h("button", { type: "button", class: "link-btn", onclick: closeEditor }, "キャンセル"),
+      h("button", { type: "button", class: "btn btn-primary btn-sm", onclick: () => applyFilter(col, getValue()) }, "適用"),
+    );
+
+  if (opts.kind === "in") {
+    const selected = new Set(current?.type === "in" ? current.values : opts.values.map((v) => v.value));
+    const list = h("ul", { class: "checklist" });
+    const draw = (values) =>
+      list.replaceChildren(
+        ...values.map((v) =>
+          h(
+            "li",
+            {},
+            h(
+              "label",
+              {},
+              h("input", { type: "checkbox", checked: selected.has(v.value), onchange: (e) => (e.target.checked ? selected.add(v.value) : selected.delete(v.value)) }),
+              h("span", { class: "val", title: v.value }, v.value),
+              h("span", { class: "count" }, fmt(v.count)),
+            ),
+          ),
+        ),
+      );
+    let shown = opts.values;
+    draw(shown);
+    const search = h("input", {
+      type: "search",
+      placeholder: "値を検索",
+      "aria-label": "値を検索",
+      oninput: debounce(async (e) => {
+        const q = e.target.value.trim();
+        const res = opts.total > opts.values.length ? (await engine.call("filter_options", { column: col, search: q })).values : opts.values.filter((v) => v.value.toLowerCase().includes(q.toLowerCase()));
+        shown = res;
+        draw(shown);
+      }, 200),
+    });
+    const bulk = h(
+      "div",
+      { class: "editor-actions" },
+      h("button", { type: "button", class: "link-btn", onclick: () => (shown.forEach((v) => selected.add(v.value)), draw(shown)) }, "表示中をすべて選択"),
+      h("button", { type: "button", class: "link-btn", onclick: () => (shown.forEach((v) => selected.delete(v.value)), draw(shown)) }, "表示中を解除"),
+    );
+    const note = opts.total > opts.values.length ? h("p", { class: "hint" }, `値が多いため上位 ${opts.values.length} 件を表示しています（全 ${fmt(opts.total)} 件）。検索で絞り込めます。`) : null;
+    box.replaceChildren(title, search, bulk, list, note, actions(() => ({ type: "in", values: [...selected] })));
+  } else {
+    const isDate = opts.kind === "date";
+    const attrs = isDate ? { type: "date", min: opts.min, max: opts.max } : { type: "number", step: "any" };
+    const lo = h("input", { ...attrs, value: current?.min ?? "", placeholder: fmt(opts.min), "aria-label": "下限" });
+    const hi = h("input", { ...attrs, value: current?.max ?? "", placeholder: fmt(opts.max), "aria-label": "上限" });
+    box.replaceChildren(
+      title,
+      h("div", { class: "row" }, h("label", { class: "field" }, h("span", {}, isDate ? "開始日" : "最小値"), lo), h("label", { class: "field" }, h("span", {}, isDate ? "終了日" : "最大値"), hi)),
+      h("p", { class: "hint" }, `データの範囲: ${fmt(opts.min)} 〜 ${fmt(opts.max)}（境界を含む）。片方だけの指定もできます。`),
+      actions(() => ({ type: "range", min: lo.value === "" ? null : lo.value, max: hi.value === "" ? null : hi.value })),
+    );
+  }
+  box.hidden = false;
+  box.querySelector("input")?.focus();
+}
+
+async function applyFilter(col, value) {
+  const filters = { ...(state.meta.filters || {}) };
+  if (value === null) delete filters[col];
+  else filters[col] = value;
+  await setFilters(filters);
+}
+
+async function setFilters(filters) {
+  try {
+    const meta = await withBusy("フィルターを適用中…", () => engine.call("set_filters", { filters }));
+    state.meta = meta;
+    state.preview.page = 0;
+    closeEditor();
+    renderChips();
+    renderKpis();
+    renderTab();
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// ------------------------------------------------------------------ タブ
+
+const TABS = {
+  overview: renderOverview,
+  group: renderGroup,
+  trend: renderTrend,
+  dist: renderDist,
+  corr: renderCorr,
+  pivot: renderPivot,
+  data: renderData,
+};
+
+function selectTab(tab) {
+  state.tab = tab;
+  for (const b of document.querySelectorAll("#tabs [role=tab]")) {
+    const on = b.dataset.tab === tab;
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
+  renderTab();
+}
+
+function disposeCharts() {
+  for (const { chart, observer } of state.charts) {
+    observer.disconnect();
+    chart.dispose();
+  }
+  state.charts = [];
+}
+
+async function renderTab() {
+  const token = ++state.renderToken;
+  const panel = $("panel");
+  try {
+    const nodes = await withBusy("集計中…", () => TABS[state.tab]());
+    if (token !== state.renderToken) return; // 後から始めた描画を優先する
+    disposeCharts();
+    panel.replaceChildren(...[nodes].flat());
+    for (const fn of pendingCharts.splice(0)) fn();
+  } catch (err) {
+    if (token !== state.renderToken) return;
+    pendingCharts.length = 0;
+    disposeCharts();
+    panel.replaceChildren(h("p", { class: "error", role: "alert" }, err instanceof UserFacingError ? err.message : `表示できませんでした: ${err.message}`));
+  }
+}
+
+function card({ title, sub, actions = [], body }) {
+  return h(
+    "section",
+    { class: "card" },
+    h("div", { class: "card-head" }, h("div", {}, h("h2", { class: "card-title" }, title), sub ? h("p", { class: "card-sub" }, sub) : null), h("div", { class: "card-actions" }, actions)),
+    body,
+  );
+}
+
+function controlsRow(...fields) {
+  return h("div", { class: "controls" }, fields);
+}
+
+function emptyState(text) {
+  return h("div", { class: "card" }, h("p", { class: "empty" }, text));
+}
+
+function measureOptions(includeCount = true) {
+  const opts = state.meta.measures.map((m) => [m, m]);
+  return includeCount ? [[COUNT, "件数（行数）"], ...opts] : opts;
+}
+
+function aggOptions(measure) {
+  if (measure === COUNT) return [["count", "件数"]];
+  return Object.entries(AGG_LABELS);
+}
+
+function dimOptions() {
+  return state.meta.dimensions.map((d) => [d, d]);
+}
+
+function measureLabel(measure, agg) {
+  return measure === COUNT ? "件数" : `${measure}（${AGG_LABELS[agg]}）`;
+}
+
+/** カードに「グラフ / 表」の切替と書き出しボタンを付ける。 */
+function chartCard({ key, title, sub, chartBuilder, table, csv, tall, height }) {
+  const view = state.views[key] || "chart";
+  const chartEl = h("div", { class: `chart${tall ? " chart-tall" : ""}`, role: "img", "aria-label": `${title}のグラフ。表で見るボタンで数値を確認できます。` });
+  if (height) chartEl.style.height = `${height}px`;
+  const tableEl = h("div", { class: "table-wrap" }, table());
+  chartEl.hidden = view !== "chart";
+  tableEl.hidden = view !== "table";
+  let chart = null;
+  const toggle = (v) => {
+    state.views[key] = v;
+    chartEl.hidden = v !== "chart";
+    tableEl.hidden = v !== "table";
+    btnChart.setAttribute("aria-pressed", String(v === "chart"));
+    btnTable.setAttribute("aria-pressed", String(v === "table"));
+    if (v === "chart") chart?.resize();
+  };
+  const btnChart = h("button", { type: "button", class: "btn btn-sm", "aria-pressed": String(view === "chart"), onclick: () => toggle("chart") }, "グラフ");
+  const btnTable = h("button", { type: "button", class: "btn btn-sm", "aria-pressed": String(view === "table"), onclick: () => toggle("table") }, "表");
+  const btnCsv = h("button", { type: "button", class: "btn btn-sm", onclick: csv }, "CSV");
+  const btnPng = h(
+    "button",
+    {
+      type: "button",
+      class: "btn btn-sm",
+      onclick: () => {
+        if (!chart) return;
+        toggle("chart");
+        const url = chart.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: tokens().surface });
+        fetch(url)
+          .then((r) => r.blob())
+          .then((b) => download(`${baseName()}_${key}.png`, b));
+      },
+    },
+    "PNG",
+  );
+  pendingCharts.push(() => {
+    chart = echarts.init(chartEl, null, { renderer: "canvas" });
+    chart.setOption(chartBuilder(tokens()));
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(chartEl);
+    state.charts.push({ chart, observer });
+  });
+  return card({ title, sub, actions: [btnChart, btnTable, btnCsv, btnPng], body: [chartEl, tableEl] });
+}
+
+const pendingCharts = [];
+
+function simpleTable(header, rows, numericCols = []) {
+  return h(
+    "table",
+    {},
+    h("thead", {}, h("tr", {}, header.map((c, i) => h("th", { class: numericCols.includes(i) ? "num" : null, scope: "col" }, c)))),
+    h(
+      "tbody",
+      {},
+      rows.map((r) =>
+        h(
+          "tr",
+          {},
+          r.map((v, i) => h("td", { class: [numericCols.includes(i) ? "num" : "", v === null ? "null" : ""].join(" ").trim() || null, title: typeof v === "string" ? v : null }, numericCols.includes(i) ? fmt(v) : (v ?? "—"))),
+        ),
+      ),
+    ),
+  );
+}
+
+// ------------------------------------------------------------------ チャート共通
+
+function tokens() {
+  const s = getComputedStyle(document.documentElement);
+  const v = (name) => s.getPropertyValue(name).trim();
+  return {
+    surface: v("--surface"),
+    ink: v("--ink"),
+    ink2: v("--ink-2"),
+    muted: v("--muted"),
+    hairline: v("--hairline"),
+    baseline: v("--baseline"),
+    series: Array.from({ length: 8 }, (_, i) => v(`--series-${i + 1}`)),
+    other: v("--series-other"),
+    seqLow: v("--seq-low"),
+    seqHigh: v("--seq-high"),
+    divNeg: v("--div-neg"),
+    divMid: v("--div-mid"),
+    divPos: v("--div-pos"),
+    dark: document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches),
+    font: v("--font"),
+  };
+}
+
+function base(t) {
+  return {
+    animationDuration: 300,
+    textStyle: { fontFamily: t.font, color: t.ink2 },
+    tooltip: {
+      backgroundColor: t.surface,
+      borderColor: t.hairline,
+      borderWidth: 1,
+      padding: [8, 12],
+      textStyle: { color: t.ink, fontSize: 12 },
+      extraCssText: "border-radius:10px;box-shadow:0 8px 24px -12px rgba(0,0,0,.35);",
+      confine: true,
+    },
+  };
+}
+
+function valueAxis(t, extra = {}) {
+  return {
+    type: "value",
+    axisLine: { show: false },
+    axisTick: { show: false },
+    splitLine: { lineStyle: { color: t.hairline, type: "solid" } },
+    axisLabel: { color: t.muted, formatter: (v) => compact(v) },
+    ...extra,
+  };
+}
+
+function categoryAxis(t, data, extra = {}) {
+  return {
+    type: "category",
+    data,
+    axisLine: { lineStyle: { color: t.baseline } },
+    axisTick: { show: false },
+    axisLabel: { color: t.ink2, hideOverlap: true },
+    ...extra,
+  };
+}
+
+function tipRow(color, name, value) {
+  const dot = color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${esc(color)};margin-right:6px"></span>` : "";
+  return `<div style="display:flex;gap:16px;justify-content:space-between"><span>${dot}${esc(name)}</span><b style="font-variant-numeric:tabular-nums">${esc(value)}</b></div>`;
+}
+
+/** 系列名ごとに色を固定する。初めて見た名前から順に色番号を割り当て、8色を超えたら灰色。 */
+function seriesColor(t, name) {
+  if (name === "その他") return t.other;
+  if (!state.colorMap.has(name)) state.colorMap.set(name, state.colorMap.size);
+  const i = state.colorMap.get(name);
+  return i < 8 ? t.series[i] : t.other;
+}
+
+// ------------------------------------------------------------------ 概要
+
+async function renderOverview() {
+  const [prof, ins] = await Promise.all([engine.call("profile"), engine.call("insights")]);
+  const { meta } = state;
+  const counts = {};
+  for (const c of meta.columns) counts[c.kind] = (counts[c.kind] || 0) + 1;
+
+  const insightCard = card({
+    title: "自動インサイト",
+    sub: "集計結果から機械的に読み取れる事実だけを表示します",
+    body: ins.items.length ? h("ul", { class: "insights" }, ins.items.map((i) => h("li", {}, i.text))) : h("p", { class: "empty" }, "目立った傾向は検出されませんでした。"),
+  });
+  const structure = card({
+    title: "データの構成",
+    sub: `フィルター後 ${fmt(prof.rows)} 行`,
+    body: h(
+      "dl",
+      { class: "stats" },
+      Object.entries(KIND_LABELS).map(([k, label]) => h("div", { class: "stat" }, h("dt", {}, `${label}列`), h("dd", {}, `${counts[k] || 0}`))),
+    ),
+  });
+
+  const rows = prof.columns.map((c) => {
+    const missingPct = c.count + c.missing ? (c.missing / (c.count + c.missing)) * 100 : 0;
+    let summary = "";
+    if (c.kind === "number") summary = `${fmt(c.min)} 〜 ${fmt(c.max)}（平均 ${fmt(c.mean)}）`;
+    else if (c.kind === "datetime") summary = `${c.min ?? "—"} 〜 ${c.max ?? "—"}`;
+    else summary = (c.top || []).map((t) => `${t.value}（${fmt(t.count)}）`).join("、");
+    return h(
+      "tr",
+      {},
+      h("th", { scope: "row", title: c.name }, c.name),
+      h("td", {}, h("span", { class: "badge", dataset: { kind: c.kind } }, KIND_LABELS[c.kind])),
+      h("td", { class: "num" }, h("span", { class: "meter", "aria-hidden": "true" }, h("span", { style: `width:${Math.min(100, missingPct)}%` })), `${missingPct.toFixed(1)}%`),
+      h("td", { class: "num" }, fmt(c.unique)),
+      h("td", { title: summary }, summary),
+    );
+  });
+  const profileCard = card({
+    title: "列のプロファイル",
+    sub: "型は自動判定です。数値や日付として扱われていない列は、元データの表記を確認してください。",
+    actions: [
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn btn-sm",
+          onclick: () =>
+            downloadCsv(
+              "列プロファイル",
+              ["列名", "型", "件数", "空白", "一意数", "最小", "最大", "平均", "合計"],
+              prof.columns.map((c) => [c.name, KIND_LABELS[c.kind], c.count, c.missing, c.unique, c.min ?? "", c.max ?? "", c.mean ?? "", c.sum ?? ""]),
+            ),
+        },
+        "CSV",
+      ),
+    ],
+    body: h(
+      "div",
+      { class: "table-wrap" },
+      h(
+        "table",
+        {},
+        h("thead", {}, h("tr", {}, ["列名", "型", "空白率", "一意数", "要約"].map((c, i) => h("th", { scope: "col", class: i === 2 || i === 3 ? "num" : null }, c)))),
+        h("tbody", {}, rows),
+      ),
+    ),
+  });
+  return [h("div", { class: "grid-2" }, insightCard, structure), profileCard];
+}
+
+// ------------------------------------------------------------------ 集計（カテゴリ別）
+
+async function renderGroup() {
+  const c = state.ctl.group;
+  if (!c.dimension) return emptyState("集計の軸に使えるカテゴリ列がありません。");
+  if (!aggOptions(c.measure).some(([a]) => a === c.agg)) c.agg = c.measure === COUNT ? "count" : "sum";
+  const res = await engine.call("group", { dimension: c.dimension, measure: c.measure, agg: c.agg, top: Number(c.top) });
+  const update = (k) => (v) => {
+    c[k] = v;
+    renderTab();
+  };
+  const controls = controlsRow(
+    selectField("軸（カテゴリ）", dimOptions(), c.dimension, update("dimension")),
+    selectField("値", measureOptions(), c.measure, update("measure")),
+    selectField("集計方法", aggOptions(c.measure), c.agg, update("agg")),
+    selectField("表示件数", [["10", "上位10"], ["15", "上位15"], ["25", "上位25"], ["50", "上位50"]], c.top, update("top")),
+  );
+  if (!res.rows.length) return [controls, emptyState("集計できる行がありません。フィルターを見直してください。")];
+  const rows = [...res.rows, ...(res.other ? [res.other] : [])];
+  const label = measureLabel(c.measure, res.agg);
+  const share = (v) => (res.total ? `${((v / res.total) * 100).toFixed(1)}%` : "");
+  const chartHeight = Math.max(260, rows.length * 30 + 60);
+
+  const chart = chartCard({
+    key: "group",
+    title: `${c.dimension} 別の${label}`,
+    sub: `${fmt(res.groups)} グループ中 上位 ${res.rows.length}${res.other ? "（残りは「その他」に合算）" : ""}`,
+    height: chartHeight,
+    chartBuilder: (t) => ({
+      ...base(t),
+      grid: { left: 8, right: 56, top: 8, bottom: 8, containLabel: true },
+      tooltip: {
+        ...base(t).tooltip,
+        trigger: "item",
+        formatter: (p) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(p.name)}</div>${tipRow(p.color, label, fmt(p.value))}${res.total ? tipRow(null, "構成比", share(p.value)) : ""}`,
+      },
+      xAxis: valueAxis(t),
+      yAxis: categoryAxis(t, rows.map((r) => r.label), { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 160, overflow: "truncate" } }),
+      series: [
+        {
+          type: "bar",
+          data: rows.map((r, i) => ({ value: r.value, itemStyle: { color: res.other && i === rows.length - 1 ? t.other : t.series[0] } })),
+          barMaxWidth: 20,
+          itemStyle: { borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: "right", color: t.ink2, formatter: (p) => (p.dataIndex === 0 ? compact(p.value) : "") },
+          emphasis: { focus: "self" },
+        },
+      ],
+    }),
+    table: () => simpleTable([c.dimension, label, ...(res.total ? ["構成比"] : [])], rows.map((r) => [r.label, r.value, ...(res.total ? [share(r.value)] : [])]), [1]),
+    csv: () => downloadCsv(`${c.dimension}別`, [c.dimension, label], rows.map((r) => [r.label, r.value])),
+  });
+  return [controls, chart];
+}
+
+// ------------------------------------------------------------------ 時系列
+
+async function renderTrend() {
+  const c = state.ctl.trend;
+  if (!c.date) return emptyState("日付として判定された列がありません。日付列が「2025-01-31」「2025/1/31」「2025年1月31日」などの形式か確認してください。");
+  if (!aggOptions(c.measure).some(([a]) => a === c.agg)) c.agg = c.measure === COUNT ? "count" : "sum";
+  const res = await engine.call("timeseries", { date_column: c.date, measure: c.measure, agg: c.agg, freq: c.freq, split: c.split || null, max_series: 5 });
+  const update = (k) => (v) => {
+    c[k] = v;
+    renderTab();
+  };
+  const controls = controlsRow(
+    selectField("日付列", state.meta.datetimes.map((d) => [d, d]), c.date, update("date")),
+    selectField("値", measureOptions(), c.measure, update("measure")),
+    selectField("集計方法", aggOptions(c.measure), c.agg, update("agg")),
+    selectField("単位", Object.entries(FREQ_LABELS), c.freq, update("freq")),
+    selectField("内訳（上位5件）", [["", "なし"], ...dimOptions()], c.split, update("split")),
+  );
+  if (!res.periods.length) return [controls, emptyState("日付が入っている行がありません。")];
+  const label = measureLabel(c.measure, res.agg);
+  const multi = res.series.length > 1;
+  const zoom = res.periods.length > 36;
+
+  const chart = chartCard({
+    key: "trend",
+    title: `${FREQ_LABELS[c.freq]}別の${label}${c.split ? `（${c.split} 別）` : ""}`,
+    sub: `${res.periods[0]} 〜 ${res.periods[res.periods.length - 1]}・${res.periods.length} 期間。データのない期間は ${["sum", "count"].includes(res.agg) ? "0" : "空白"} として表示します。`,
+    tall: multi,
+    chartBuilder: (t) => ({
+      ...base(t),
+      grid: { left: 8, right: 24, top: multi ? 44 : 16, bottom: zoom ? 56 : 8, containLabel: true },
+      legend: multi ? { top: 0, left: 0, icon: "roundRect", itemWidth: 12, itemHeight: 4, textStyle: { color: t.ink2 } } : undefined,
+      tooltip: {
+        ...base(t).tooltip,
+        trigger: "axis",
+        axisPointer: { type: "line", lineStyle: { color: t.baseline } },
+        formatter: (ps) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(ps[0].axisValue)}</div>${ps.map((p) => tipRow(p.color, multi ? p.seriesName : label, fmt(p.value))).join("")}`,
+      },
+      xAxis: categoryAxis(t, res.periods, { boundaryGap: false }),
+      yAxis: valueAxis(t),
+      dataZoom: zoom ? [{ type: "inside" }, { type: "slider", height: 20, bottom: 8, borderColor: t.hairline, textStyle: { color: t.muted } }] : undefined,
+      series: res.series.map((s) => {
+        const color = multi ? seriesColor(t, s.name) : t.series[0];
+        return {
+          name: s.name,
+          type: "line",
+          data: s.values,
+          color,
+          showSymbol: !multi && res.periods.length <= 24,
+          symbolSize: 8,
+          lineStyle: { width: 2 },
+          connectNulls: false,
+          areaStyle: multi ? undefined : { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: color + "33" }, { offset: 1, color: color + "00" }] } },
+          emphasis: { focus: "series" },
+        };
+      }),
+    }),
+    table: () => simpleTable(["期間", ...res.series.map((s) => s.name)], res.periods.map((p, i) => [p, ...res.series.map((s) => s.values[i])]), res.series.map((_, i) => i + 1)),
+    csv: () => downloadCsv(`${FREQ_LABELS[c.freq]}別推移`, ["期間", ...res.series.map((s) => s.name)], res.periods.map((p, i) => [p, ...res.series.map((s) => s.values[i] ?? "")])),
+  });
+  return [controls, chart];
+}
+
+// ------------------------------------------------------------------ 分布
+
+async function renderDist() {
+  const c = state.ctl.dist;
+  if (!c.column) return emptyState("数値として判定された列がありません。");
+  const res = await engine.call("histogram", { column: c.column, bins: Number(c.bins) });
+  const update = (k) => (v) => {
+    c[k] = v;
+    renderTab();
+  };
+  const controls = controlsRow(
+    selectField("数値列", measureOptions(false), c.column, update("column")),
+    selectField("階級数", [["0", "自動"], ["10", "10"], ["20", "20"], ["40", "40"]], c.bins, update("bins")),
+  );
+  if (!res.bins.length) return [controls, emptyState("値が入っている行がありません。")];
+  const labels = res.bins.map((b) => `${compact(b.from)}–${compact(b.to)}`);
+  const s = res.stats;
+  const statList = h(
+    "dl",
+    { class: "stats" },
+    [
+      ["件数", s.count],
+      ["平均", s.mean],
+      ["標準偏差", s.std],
+      ["最小", s.min],
+      ["第1四分位", s.q1],
+      ["中央値", s.median],
+      ["第3四分位", s.q3],
+      ["最大", s.max],
+    ].map(([k, v]) => h("div", { class: "stat" }, h("dt", {}, k), h("dd", {}, fmt(v)))),
+  );
+  const chart = chartCard({
+    key: "dist",
+    title: `${c.column} の分布`,
+    sub: `${res.bins.length} 階級（各階級は下限を含み上限を含まない。最後の階級のみ上限を含む）`,
+    chartBuilder: (t) => ({
+      ...base(t),
+      grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
+      tooltip: {
+        ...base(t).tooltip,
+        trigger: "item",
+        formatter: (p) => {
+          const b = res.bins[p.dataIndex];
+          return `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(fmt(b.from))} 〜 ${esc(fmt(b.to))}</div>${tipRow(p.color, "件数", fmt(b.count))}${tipRow(null, "割合", `${((b.count / s.count) * 100).toFixed(1)}%`)}`;
+        },
+      },
+      xAxis: categoryAxis(t, labels),
+      yAxis: valueAxis(t),
+      series: [{ type: "bar", data: res.bins.map((b) => b.count), barCategoryGap: "6%", itemStyle: { color: t.series[0], borderRadius: [4, 4, 0, 0] } }],
+    }),
+    table: () => simpleTable(["下限", "上限", "件数"], res.bins.map((b) => [b.from, b.to, b.count]), [0, 1, 2]),
+    csv: () => downloadCsv(`${c.column}_分布`, ["下限", "上限", "件数"], res.bins.map((b) => [b.from, b.to, b.count])),
+  });
+  chart.append(statList);
+  return [controls, chart];
+}
+
+// ------------------------------------------------------------------ 相関
+
+async function renderCorr() {
+  const res = await engine.call("correlation");
+  if (res.columns.length < 2) return emptyState("相関を計算するには、値が2種類以上ある数値列が2列以上必要です。");
+  const n = res.columns.length;
+  const data = [];
+  res.matrix.forEach((row, i) => row.forEach((v, j) => data.push([j, i, v])));
+  const chart = chartCard({
+    key: "corr",
+    title: "数値列どうしの相関（ピアソン）",
+    sub: "1 に近いほど同じ方向に、-1 に近いほど逆方向に動きます。相関は因果関係を示しません。",
+    height: Math.min(640, Math.max(280, n * 64 + 120)),
+    chartBuilder: (t) => ({
+      ...base(t),
+      grid: { left: 8, right: 16, top: 8, bottom: 56, containLabel: true },
+      tooltip: {
+        ...base(t).tooltip,
+        trigger: "item",
+        formatter: (p) => `${esc(res.columns[p.value[1]])} × ${esc(res.columns[p.value[0]])}<br/><b>r = ${p.value[2] === null ? "—" : p.value[2].toFixed(3)}</b>`,
+      },
+      xAxis: categoryAxis(t, res.columns, { axisLabel: { color: t.ink2, rotate: n > 5 ? 30 : 0, width: 120, overflow: "truncate" }, axisLine: { show: false }, splitArea: { show: false } }),
+      yAxis: categoryAxis(t, res.columns, { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 140, overflow: "truncate" } }),
+      visualMap: { min: -1, max: 1, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemHeight: 160, itemWidth: 10, text: ["+1", "-1"], textStyle: { color: t.muted }, inRange: { color: [t.divNeg, t.divMid, t.divPos] } },
+      series: [
+        {
+          type: "heatmap",
+          data: data.map(([x, y, v]) => ({ value: [x, y, v], label: { color: v !== null && Math.abs(v) > 0.6 ? "#fff" : t.ink } })),
+          label: { show: n <= 10, formatter: (p) => (p.value[2] === null ? "" : p.value[2].toFixed(2)), fontSize: 11 },
+          itemStyle: { borderColor: t.surface, borderWidth: 2, borderRadius: 4 },
+          emphasis: { itemStyle: { borderColor: t.ink, borderWidth: 1 } },
+        },
+      ],
+    }),
+    table: () => simpleTable(["", ...res.columns], res.columns.map((c, i) => [c, ...res.matrix[i].map((v) => (v === null ? null : Number(v.toFixed(3))))]), res.columns.map((_, i) => i + 1)),
+    csv: () => downloadCsv("相関行列", ["", ...res.columns], res.columns.map((c, i) => [c, ...res.matrix[i]])),
+  });
+  return chart;
+}
+
+// ------------------------------------------------------------------ クロス集計
+
+async function renderPivot() {
+  const c = state.ctl.pivot;
+  if (!c.row) return emptyState("クロス集計に使えるカテゴリ列がありません。");
+  if (!aggOptions(c.measure).some(([a]) => a === c.agg)) c.agg = c.measure === COUNT ? "count" : "sum";
+  const res = await engine.call("pivot", { row: c.row, column: c.column, measure: c.measure, agg: c.agg });
+  const update = (k) => (v) => {
+    c[k] = v;
+    renderTab();
+  };
+  const controls = controlsRow(
+    selectField("行", dimOptions(), c.row, update("row")),
+    selectField("列", dimOptions(), c.column, update("column")),
+    selectField("値", measureOptions(), c.measure, update("measure")),
+    selectField("集計方法", aggOptions(c.measure), c.agg, update("agg")),
+  );
+  if (!res.rows.length) return [controls, emptyState("集計できる行がありません。")];
+  const label = measureLabel(c.measure, res.agg);
+  const flat = res.matrix.flat().filter((v) => v !== null);
+  const min = Math.min(...flat);
+  const max = Math.max(...flat);
+  const data = [];
+  res.matrix.forEach((row, i) => row.forEach((v, j) => data.push([j, i, v])));
+  const cells = res.rows.length * res.columns.length;
+  const chart = chartCard({
+    key: "pivot",
+    title: `${c.row} × ${c.column} の${label}`,
+    sub: `行は上位30、列は上位12まで（件数順）。それ以外は「その他」に合算。空白のセルは該当データなし。`,
+    height: Math.min(900, Math.max(240, res.rows.length * 40 + 140)),
+    chartBuilder: (t) => ({
+      ...base(t),
+      grid: { left: 8, right: 16, top: 8, bottom: 56, containLabel: true },
+      tooltip: {
+        ...base(t).tooltip,
+        trigger: "item",
+        formatter: (p) => `<div style="margin-bottom:4px;color:${esc(t.muted)}">${esc(res.rows[p.value[1]])} × ${esc(res.columns[p.value[0]])}</div>${tipRow(null, label, fmt(p.value[2]))}`,
+      },
+      xAxis: categoryAxis(t, res.columns, { position: "top", axisLine: { show: false }, axisLabel: { color: t.ink2, width: 100, overflow: "truncate", interval: 0, rotate: res.columns.length > 6 ? 30 : 0 } }),
+      yAxis: categoryAxis(t, res.rows, { inverse: true, axisLine: { show: false }, axisLabel: { color: t.ink2, width: 140, overflow: "truncate", interval: 0 } }),
+      visualMap: { min, max: max === min ? min + 1 : max, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemHeight: 160, itemWidth: 10, text: [compact(max), compact(min)], textStyle: { color: t.muted }, inRange: { color: [t.seqLow, t.seqHigh] } },
+      series: [
+        {
+          type: "heatmap",
+          data: data.map(([x, y, v]) => {
+            const ratio = v === null || max === min ? 0 : (v - min) / (max - min);
+            return { value: [x, y, v], label: { color: ratio > 0.55 ? (t.dark ? "#0b0b0b" : "#fff") : t.ink } };
+          }),
+          label: { show: cells <= 160, formatter: (p) => (p.value[2] === null ? "" : compact(p.value[2])), fontSize: 11 },
+          itemStyle: { borderColor: t.surface, borderWidth: 2, borderRadius: 4 },
+          emphasis: { itemStyle: { borderColor: t.ink, borderWidth: 1 } },
+        },
+      ],
+    }),
+    table: () => simpleTable([`${c.row} \\ ${c.column}`, ...res.columns], res.rows.map((r, i) => [r, ...res.matrix[i]]), res.columns.map((_, i) => i + 1)),
+    csv: () => downloadCsv("クロス集計", [`${c.row} \\ ${c.column}`, ...res.columns], res.rows.map((r, i) => [r, ...res.matrix[i].map((v) => v ?? "")])),
+  });
+  return [controls, chart];
+}
+
+// ------------------------------------------------------------------ データ
+
+async function renderData() {
+  const p = state.preview;
+  const res = await engine.call("preview", { page: p.page, size: 50, search: p.search, sort: p.sort, desc: p.desc });
+  const search = h("input", {
+    type: "search",
+    value: p.search,
+    placeholder: "すべての列から検索",
+    "aria-label": "データを検索",
+    oninput: debounce((e) => {
+      p.search = e.target.value;
+      p.page = 0;
+      renderTab().then(() => {
+        const box = $("panel").querySelector("input[type=search]");
+        box?.focus();
+        box?.setSelectionRange(box.value.length, box.value.length);
+      });
+    }, 300),
+  });
+  const header = h(
+    "tr",
+    {},
+    res.columns.map((c) =>
+      h(
+        "th",
+        { scope: "col", class: c.kind === "number" ? "num" : null, "aria-sort": p.sort === c.name ? (p.desc ? "descending" : "ascending") : null },
+        h(
+          "button",
+          {
+            type: "button",
+            dataset: { dir: p.sort === c.name ? (p.desc ? "desc" : "asc") : "" },
+            title: `${c.name}（${KIND_LABELS[c.kind]}）で並べ替え`,
+            onclick: () => {
+              if (p.sort === c.name) p.desc = !p.desc;
+              else Object.assign(p, { sort: c.name, desc: c.kind === "number" });
+              renderTab();
+            },
+          },
+          c.name,
+        ),
+      ),
+    ),
+  );
+  const body = res.rows.map((r) =>
+    h(
+      "tr",
+      {},
+      r.map((v, i) => {
+        const num = res.columns[i].kind === "number";
+        return h("td", { class: [num ? "num" : "", v === null ? "null" : ""].join(" ").trim() || null, title: typeof v === "string" ? v : null }, num ? fmt(v) : (v ?? "—"));
+      }),
+    ),
+  );
+  const go = (page) => () => {
+    p.page = page;
+    renderTab();
+  };
+  const pager = h(
+    "div",
+    { class: "pager" },
+    h("span", {}, `${fmt(res.matched)} 行中 ${fmt(res.matched ? res.page * 50 + 1 : 0)}–${fmt(Math.min(res.matched, (res.page + 1) * 50))} 行目`),
+    h(
+      "div",
+      { class: "pager-buttons" },
+      h("button", { type: "button", class: "btn btn-sm", disabled: res.page === 0, onclick: go(0) }, "« 最初"),
+      h("button", { type: "button", class: "btn btn-sm", disabled: res.page === 0, onclick: go(res.page - 1) }, "‹ 前へ"),
+      h("span", { style: "align-self:center;padding:0 6px" }, `${res.page + 1} / ${res.pages}`),
+      h("button", { type: "button", class: "btn btn-sm", disabled: res.page >= res.pages - 1, onclick: go(res.page + 1) }, "次へ ›"),
+      h("button", { type: "button", class: "btn btn-sm", disabled: res.page >= res.pages - 1, onclick: go(res.pages - 1) }, "最後 »"),
+    ),
+  );
+  const exportBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn btn-sm",
+      onclick: async () => {
+        const all = await withBusy("書き出し中…", () => engine.call("export_rows"));
+        downloadCsv("フィルター後データ", all.columns, all.rows);
+      },
+    },
+    "フィルター後の全行を CSV",
+  );
+  return card({
+    title: "データ",
+    sub: "列名をクリックすると並べ替えます。検索・並べ替えは表示だけに反映され、集計には左のフィルターが反映されます。",
+    actions: [exportBtn],
+    body: [h("div", { class: "controls" }, h("label", { class: "field" }, h("span", {}, "検索"), search)), h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, header), h("tbody", {}, body))), pager],
+  });
+}
+
+// ------------------------------------------------------------------ テーマ
+
+function applyStoredTheme() {
+  try {
+    const t = localStorage.getItem("pbiv-theme");
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  } catch {
+    /* 保存領域が使えない環境では OS の設定に従う */
+  }
+}
+
+function toggleTheme() {
+  const next = tokens().dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem("pbiv-theme", next);
+  } catch {
+    /* 無視 */
+  }
+  if (state.meta) renderTab();
+}
+
+// ------------------------------------------------------------------ 起動
+
+function bindEvents() {
+  for (const id of ["file-input", "file-input-2"]) {
+    $(id).addEventListener("change", (e) => {
+      openFile(e.target.files[0]);
+      e.target.value = "";
+    });
+  }
+  const zone = $("dropzone");
+  ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, () => zone.classList.add("is-over")));
+  ["dragleave", "drop"].forEach((t) => zone.addEventListener(t, () => zone.classList.remove("is-over")));
+  // ページのどこにドロップしても開く（ブラウザがファイルへ移動しないようにする）
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) openFile(file);
+  });
+  $("sample-btn").addEventListener("click", openSample);
+  $("sheet-select").addEventListener("change", (e) => changeSheet(e.target.value));
+  $("filter-column").addEventListener("change", (e) => (e.target.value ? openEditor(e.target.value) : closeEditor()));
+  $("clear-filters").addEventListener("click", () => setFilters({}));
+  $("theme-toggle").addEventListener("click", toggleTheme);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => state.meta && renderTab());
+
+  const tabs = [...document.querySelectorAll("#tabs [role=tab]")];
+  tabs.forEach((b, i) => {
+    b.addEventListener("click", () => selectTab(b.dataset.tab));
+    b.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      const next = tabs[(i + d + tabs.length) % tabs.length];
+      next.focus();
+      selectTab(next.dataset.tab);
+    });
+  });
+}
+
+applyStoredTheme();
+document.addEventListener("DOMContentLoaded", () => {
+  bindEvents();
+  if (typeof echarts === "undefined") {
+    showLoadError(new UserFacingError("グラフ描画ライブラリ（ECharts）を読み込めませんでした。直し方: インターネット接続を確認してページを再読み込みしてください。"));
+  }
+  engine.start().catch(showLoadError);
+});
+
+</script>
+  </body>
+</html>

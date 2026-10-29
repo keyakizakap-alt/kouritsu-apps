@@ -6,18 +6,44 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BUNDLE_NAME,
   VIEWER_DIR,
-  renderPySource,
+  renderAll,
 } from "../scripts/build-powerbi-viewer.mjs";
 
 const read = (name: string) => readFileSync(join(VIEWER_DIR, name), "utf8");
 const python = process.env.PYTHON || "python3";
 
-test("analysis.py.js が analysis.py から生成した最新の内容になっている", () => {
-  assert.equal(
-    read("analysis.py.js"),
-    renderPySource(read("analysis.py")),
-    "analysis.py を変更したのに analysis.py.js が古い。直し方: npm run build:powerbi-viewer を実行してコミットする",
+test("生成ファイル（analysis.py.js と 1 ファイル版 HTML）が最新の内容になっている", () => {
+  for (const [name, expected] of Object.entries(renderAll())) {
+    assert.equal(
+      read(name),
+      expected,
+      `apps/powerbi-viewer/${name} が元のファイルより古い。直し方: npm run build:powerbi-viewer を実行してコミットする`,
+    );
+  }
+});
+
+test("1 ファイル版 HTML は CDN 以外のファイルを参照しない", () => {
+  const html = read(BUNDLE_NAME);
+  const refs = [...html.matchAll(/\s(?:src|href)="([^"#]+)"/g)]
+    .map((m) => m[1])
+    .filter((url) => !/^(https:\/\/cdn\.jsdelivr\.net\/|data:)/.test(url));
+  assert.deepEqual(
+    refs,
+    [],
+    "1 ファイル版がローカルのファイルを参照している。直し方: scripts/build-powerbi-viewer.mjs の renderBundle で埋め込む",
+  );
+  const scriptSrc = html.match(/script-src ([^;]+);/)?.[1] ?? "";
+  assert.match(
+    scriptSrc,
+    /'sha256-/,
+    "インラインスクリプトのハッシュが CSP にない。直し方: npm run build:powerbi-viewer を実行する",
+  );
+  assert.doesNotMatch(
+    scriptSrc,
+    /'unsafe-inline'/,
+    "script-src に 'unsafe-inline' がある。直し方: インラインスクリプトはハッシュで許可する",
   );
 });
 

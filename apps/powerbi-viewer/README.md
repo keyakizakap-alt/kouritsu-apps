@@ -4,8 +4,10 @@ Power BI からエクスポートした CSV / Excel を、**ブラウザだけ�
 
 ## 使い方
 
+**配るのは `powerbi-viewer.html` の 1 ファイルだけで使えます。** CSS・JavaScript・Python をすべて埋め込んであるので、メールや共有フォルダで渡して、ダブルクリックで開けます。
+
 1. Power BI でビジュアル右上の「…（その他のオプション）」→「データのエクスポート」を選び、.xlsx か .csv で保存します。
-2. `index.html` をブラウザ（Chrome / Edge / Firefox / Safari の最新版）で開きます。ダブルクリックで開いても動きます。
+2. `powerbi-viewer.html`（または `index.html`）をブラウザ（Chrome / Edge / Firefox / Safari の最新版）で開きます。
 3. ファイルをドロップ（またはクリックして選択）します。「架空のサンプルデータで試す」で操作を確認できます。
 
 初回はライブラリを CDN（cdn.jsdelivr.net）から取得するため、インターネット接続が必要です（Python の準備に約10秒。2回目以降はブラウザのキャッシュで速くなります）。
@@ -53,6 +55,7 @@ Power BI からエクスポートした CSV / Excel を、**ブラウザだけ�
 | `app.js` | 画面・フィルター・グラフ（Apache ECharts）。Pyodide を Web Worker で起動 |
 | `analysis.py` | 解析エンジン（pandas）。読み込み・型推定・集計・インサイト |
 | `analysis.py.js` | `analysis.py` を `<script>` で読める形にした自動生成ファイル（`file://` 対応のため） |
+| `powerbi-viewer.html` | 上のファイルをすべて埋め込んだ 1 ファイル版（自動生成）。インラインスクリプトは CSP のハッシュで許可 |
 | `tests/test_analysis.py` | 解析エンジンの単体テスト |
 
 ### 技術選定
@@ -70,7 +73,7 @@ Power BI からエクスポートした CSV / Excel を、**ブラウザだけ�
 ## 開発
 
 ```sh
-# 解析エンジンを変更したら（analysis.py.js を再生成。忘れると npm test が失敗する）
+# ソースを変更したら（analysis.py.js と powerbi-viewer.html を再生成。忘れると npm test が失敗する）
 npm run build:powerbi-viewer
 
 # Python のテスト（ブラウザ内と同じ版を入れる）
