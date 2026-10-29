@@ -1,5 +1,10 @@
 import "server-only";
-import { assertSameSite } from "./security";
+import { assertSameSite, isPrivateHost, readLimitedBody } from "./security";
+
+const MAX_REQUEST_BYTES = 300_000;
+// AI の応答として受け取る最大サイズ。想定外に大きい応答でメモリを使い切らない
+const MAX_UPSTREAM_BYTES = 1_000_000;
+
 export function mode() {
   return process.env.LLM_API_KEY &&
     process.env.LLM_API_URL &&
@@ -7,23 +12,42 @@ export function mode() {
     ? "AI接続"
     : "デモモード";
 }
-export async function llm(system: string, data: unknown): Promise<unknown> {
-  const url = process.env.LLM_API_URL!;
+
+/** LLM_API_URL が、外部の HTTPS エンドポイントを指しているか確かめる（SSRF 対策）。 */
+export function assertSafeEndpoint(url: string) {
   const endpoint = new URL(url);
-  const hostname = endpoint.hostname.toLowerCase();
   if (
     endpoint.protocol !== "https:" ||
     endpoint.username ||
     endpoint.password ||
-    hostname === "localhost" ||
-    hostname.endsWith(".local") ||
-    /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(hostname) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
-    hostname === "::1" ||
-    hostname === "metadata.google.internal"
+    isPrivateHost(endpoint.hostname)
   )
     throw Error("configuration");
-  const response = await fetch(url, {
+  return endpoint;
+}
+
+async function readLimitedText(response: Response, maxBytes: number) {
+  const reader = response.body?.getReader();
+  if (!reader) throw Error("upstream");
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw Error("upstream-size");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+export async function llm(system: string, data: unknown): Promise<unknown> {
+  const endpoint = assertSafeEndpoint(process.env.LLM_API_URL!);
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -47,35 +71,24 @@ export async function llm(system: string, data: unknown): Promise<unknown> {
     redirect: "error",
   });
   if (!response.ok) throw Error("upstream");
-  const json = await response.json();
-  return JSON.parse(json.choices[0].message.content);
+  const json = JSON.parse(await readLimitedText(response, MAX_UPSTREAM_BYTES));
+  const result = JSON.parse(json.choices[0].message.content);
+  if (!result || typeof result !== "object" || Array.isArray(result))
+    throw Error("upstream-shape");
+  return result;
 }
+
 export async function readBody(request: Request) {
   assertSameSite(request);
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw Error("body");
-  const reader = request.body?.getReader();
-  if (!reader) throw Error("body");
-  let total = 0;
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > 300000) {
-      await reader.cancel();
-      throw Error("size");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    bytes.set(c, offset);
-    offset += c.length;
-  }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  const bytes = await readLimitedBody(request, MAX_REQUEST_BYTES);
+  const body = JSON.parse(new TextDecoder().decode(bytes));
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw Error("body");
+  return body;
 }
+
 export function validText(text: unknown): text is string {
   return (
     typeof text === "string" && text.trim().length > 0 && text.length <= 100000
