@@ -16,10 +16,10 @@
   "dependencies": {
     "@tesseract.js-data/jpn": "^1.0.0",
     "mammoth": "1.13.0",
-    "next": "16.4.2",
+    "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "read-excel-file": "9.3.12",
+    "read-excel-file": "9.3.13",
     "server-only": "^0.0.1",
     "sharp": "^0.35.5",
     "tesseract.js": "^7.0.0",
