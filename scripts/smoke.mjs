@@ -48,9 +48,27 @@ try {
   assert.equal(page.status, 200);
   assert.equal(page.headers.get("x-content-type-options"), "nosniff");
   assert.equal(page.headers.get("x-frame-options"), "DENY");
-  assert.match(
-    page.headers.get("content-security-policy") || "",
-    /frame-ancestors 'none'/,
+  const pageCsp = page.headers.get("content-security-policy") || "";
+  assert.match(pageCsp, /frame-ancestors 'none'/);
+  // ページの CSP は nonce 方式。'unsafe-inline' を使わず、HTML 内のスクリプトには同じ nonce が付く
+  const nonce = pageCsp.match(/'nonce-([^']+)'/)?.[1];
+  assert.ok(nonce, `CSP に nonce がない: ${pageCsp}`);
+  assert.doesNotMatch(pageCsp, /'unsafe-inline'|'unsafe-eval'/);
+  const html = await page.text();
+  const scripts = [...html.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  assert.ok(scripts.length > 0, "ページにスクリプトがない");
+  for (const tag of scripts)
+    assert.ok(
+      tag.includes(`nonce="${nonce}"`),
+      `nonce のないスクリプト: ${tag}`,
+    );
+  const second = await fetch(base);
+  assert.notEqual(
+    (second.headers.get("content-security-policy") || "").match(
+      /'nonce-([^']+)'/,
+    )?.[1],
+    nonce,
+    "nonce がリクエストごとに変わっていない",
   );
   const result = await post("/api/extract", { text: sample });
   assert.equal(result.status, 200);
@@ -143,8 +161,42 @@ try {
     ).status,
     400,
   );
+  assert.match(
+    documentResult.headers.get("content-security-policy") || "",
+    /default-src 'none'/,
+  );
+  // Content-Length のない（chunked）巨大アップロードも、上限を超えた時点で打ち切る
+  let sent = 0;
+  const chunk = new Uint8Array(256 * 1024);
+  const oversized = await fetch(base + "/api/document", {
+    method: "POST",
+    headers: { "Content-Type": "multipart/form-data; boundary=x" },
+    duplex: "half",
+    body: new ReadableStream({
+      pull(controller) {
+        if (sent >= 64 * 1024 * 1024) return controller.close();
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    }),
+  });
+  assert.equal(oversized.status, 400);
+  assert.ok(sent < 32 * 1024 * 1024, `上限後も ${sent} バイト読み続けた`);
+  // X-Forwarded-For を偽装しても、レート制限の枠は増えない（プロキシを信頼する設定がないため）
+  const spoofed = new FormData();
+  spoofed.append("file", new File([sample], "sample.txt"));
+  const limited = await fetch(base + "/api/document", {
+    method: "POST",
+    headers: { "X-Forwarded-For": "203.0.113.7" },
+    body: spoofed,
+  });
+  assert.equal(
+    limited.status,
+    429,
+    "X-Forwarded-For の偽装でレート制限を回避できた",
+  );
   console.log(
-    "PASS: page 200, security headers, no-store APIs, document upload/type-signature rejection, 10 requirements, page fallback, empty/oversize rejection, draft inclusion/exclusion, clauses/reason retained, no-target rejection, duplicate-rule rejection, cross-origin rejection",
+    "PASS: nonce CSP, chunked oversize abort, X-Forwarded-For spoofing does not bypass rate limit, page 200, security headers, no-store APIs, document upload/type-signature rejection, 10 requirements, page fallback, empty/oversize rejection, draft inclusion/exclusion, clauses/reason retained, no-target rejection, duplicate-rule rejection, cross-origin rejection",
   );
 } finally {
   child.kill("SIGTERM");

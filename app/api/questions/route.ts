@@ -39,17 +39,26 @@ export async function POST(request: Request) {
       throw Error("rules");
     const requirements = extract(b.text);
     if (requirements.length > 200) throw Error("size");
-    const context = b.context ?? {};
-    if (
-      [context.documentType, context.reviewPurpose, context.comment].some(
-        (value) =>
-          value !== undefined &&
-          (typeof value !== "string" || value.length > 500),
-      )
-    )
+    const raw = b.context ?? {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
       throw Error("context");
+    // AI に渡すのは検証した 3 項目だけにする（未知の項目をそのまま外部へ送らない）
+    const context: {
+      documentType?: string;
+      reviewPurpose?: string;
+      comment?: string;
+    } = {};
+    for (const key of ["documentType", "reviewPurpose", "comment"] as const) {
+      const value = raw[key];
+      if (value === undefined) continue;
+      if (typeof value !== "string" || value.length > 500)
+        throw Error("context");
+      context[key] = value;
+    }
     const decisions = b.decisions as Decisions;
     if (
+      Array.isArray(decisions) ||
+      Object.keys(decisions).length > 200 ||
       !Object.values(decisions).every(
         (d) =>
           d &&
